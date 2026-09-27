@@ -52,6 +52,7 @@ CREATE TABLE IF NOT EXISTS meta (schema_version INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS sessions (uid TEXT PRIMARY KEY, harness TEXT, native_id TEXT, path TEXT, cwd TEXT, project TEXT, model TEXT, started TEXT, updated TEXT);
 CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, session_uid TEXT, idx INTEGER, ts TEXT, role TEXT, text TEXT);
 CREATE INDEX IF NOT EXISTS messages_session ON messages(session_uid,idx);
+CREATE INDEX IF NOT EXISTS messages_ts ON messages(ts);
 CREATE TABLE IF NOT EXISTS sources (path TEXT PRIMARY KEY, mtime INTEGER, size INTEGER);
 CREATE TABLE IF NOT EXISTS dirs (path TEXT PRIMARY KEY, mtime INTEGER);
 CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(text, content='messages',content_rowid='id',tokenize='cjk unigram 1 remove_diacritics 2');

@@ -4,13 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"math"
 	"regexp"
-	"sort"
 	"strings"
 	"time"
 	"unicode"
-	"unicode/utf8"
 
 	"github.com/mattn/go-runewidth"
 )
@@ -84,6 +81,24 @@ func resumeCmd(h, id, path string) string {
 		return "pi --session " + path
 	}
 }
+func shortLatin(q string) bool {
+	found := false
+	for _, t := range terms(q) {
+		if t.Negative {
+			continue
+		}
+		if found || t.Phrase || len(t.Word) < 1 || len(t.Word) > 2 {
+			return false
+		}
+		for _, r := range t.Word {
+			if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')) {
+				return false
+			}
+		}
+		found = true
+	}
+	return found
+}
 func search(ctx context.Context, db *sql.DB, q, harness string) ([]hit, error) {
 	match := toFTS(q)
 	started := time.Now()
@@ -97,36 +112,35 @@ func search(ctx context.Context, db *sql.DB, q, harness string) ([]hit, error) {
 		}
 		sqlq += `ORDER BY m.ts DESC,m.id DESC LIMIT 300`
 	} else {
-		sqlq = `SELECT messages_fts.rowid FROM messages_fts WHERE messages_fts MATCH ? `
+		sqlq = `SELECT s.uid,s.harness,s.native_id,s.project,s.cwd,s.path,m.id,m.idx,m.ts,m.role,m.text FROM messages_fts JOIN messages m ON m.id=messages_fts.rowid JOIN sessions s ON s.uid=m.session_uid WHERE messages_fts MATCH ? `
 		args = append(args, match)
+		if shortLatin(q) {
+			var latest string
+			if e := db.QueryRowContext(ctx, "SELECT max(ts) FROM messages").Scan(&latest); e != nil {
+				return nil, e
+			}
+			if t, e := time.Parse(time.RFC3339Nano, latest); e == nil {
+				sqlq += `AND m.ts>=? `
+				args = append(args, t.AddDate(0, 0, -7).UTC().Format(time.RFC3339Nano))
+			}
+		}
 		if harness != "" && harness != "all" {
-			sqlq = `SELECT messages_fts.rowid FROM messages_fts JOIN messages cm ON cm.id=messages_fts.rowid JOIN sessions cs ON cs.uid=cm.session_uid WHERE messages_fts MATCH ? AND cs.harness=? `
+			sqlq += `AND s.harness=? `
 			args = append(args, harness)
 		}
-		sqlq += `ORDER BY messages_fts.rowid DESC LIMIT 320`
+		sqlq += `ORDER BY bm25(messages_fts),m.ts DESC,m.id DESC LIMIT 300`
 	}
 	rows, e := db.QueryContext(ctx, sqlq, args...)
 	if e != nil {
 		return nil, e
 	}
 	out := []hit{}
-	ids := []any{}
-	if match == "" {
-		for rows.Next() {
-			var x hit
-			if e = rows.Scan(&x.UID, &x.Harness, &x.SessionID, &x.Project, &x.CWD, &x.Path, &x.ID, &x.Index, &x.TS, &x.Role, &x.Text); e != nil {
-				break
-			}
-			out = append(out, x)
+	for rows.Next() {
+		var x hit
+		if e = rows.Scan(&x.UID, &x.Harness, &x.SessionID, &x.Project, &x.CWD, &x.Path, &x.ID, &x.Index, &x.TS, &x.Role, &x.Text); e != nil {
+			break
 		}
-	} else {
-		for rows.Next() {
-			var id int64
-			if e = rows.Scan(&id); e != nil {
-				break
-			}
-			ids = append(ids, id)
-		}
+		out = append(out, x)
 	}
 	if e == nil {
 		e = rows.Err()
@@ -138,36 +152,6 @@ func search(ctx context.Context, db *sql.DB, q, harness string) ([]hit, error) {
 	}
 	if e = ctx.Err(); e != nil {
 		return nil, e
-	}
-	if match != "" && len(ids) > 0 {
-		started = time.Now()
-		sqlq = `SELECT s.uid,s.harness,s.native_id,s.project,s.cwd,s.path,m.id,m.idx,m.ts,m.role,m.text FROM messages m JOIN sessions s ON s.uid=m.session_uid WHERE m.id IN (` + strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",") + `)`
-		rows, e = db.QueryContext(ctx, sqlq, ids...)
-		if e != nil {
-			return nil, e
-		}
-		for rows.Next() {
-			var x hit
-			if e = rows.Scan(&x.UID, &x.Harness, &x.SessionID, &x.Project, &x.CWD, &x.Path, &x.ID, &x.Index, &x.TS, &x.Role, &x.Text); e != nil {
-				break
-			}
-			out = append(out, x)
-		}
-		if e == nil {
-			e = rows.Err()
-		}
-		rows.Close()
-		if e != nil {
-			return nil, e
-		}
-		if e = ctx.Err(); e != nil {
-			return nil, e
-		}
-		rankHits(out, terms(q))
-		if len(out) > 300 {
-			out = out[:300]
-		}
-		timing("hydrate", started)
 	}
 	started = time.Now()
 	ts := terms(q)
@@ -184,68 +168,6 @@ func search(ctx context.Context, db *sql.DB, q, harness string) ([]hit, error) {
 	return out, nil
 }
 
-// BM25 over a bounded newest-hit sample keeps common prefixes independent of corpus size.
-func rankHits(rows []hit, ts []term) {
-	if len(rows) < 2 {
-		return
-	}
-	words := []string{}
-	for _, t := range ts {
-		if !t.Negative {
-			words = append(words, strings.ToLower(t.Word))
-		}
-	}
-	if len(words) == 0 {
-		return
-	}
-	type scored struct {
-		row    hit
-		tf     []int
-		length int
-		score  float64
-	}
-	items := make([]scored, len(rows))
-	df := make([]int, len(words))
-	total := 0
-	for i, r := range rows {
-		lower := strings.ToLower(r.Text)
-		n := utf8.RuneCountInString(r.Text)
-		items[i] = scored{row: r, tf: make([]int, len(words)), length: n}
-		total += n
-		for j, w := range words {
-			items[i].tf[j] = strings.Count(lower, w)
-			if items[i].tf[j] > 0 {
-				df[j]++
-			}
-		}
-	}
-	avg := float64(total) / float64(len(rows))
-	if avg == 0 {
-		avg = 1
-	}
-	for i := range items {
-		for j, tf := range items[i].tf {
-			if tf == 0 {
-				continue
-			}
-			idf := math.Log(1 + (float64(len(rows)-df[j])+0.5)/(float64(df[j])+0.5))
-			f := float64(tf)
-			items[i].score += idf * f * 2.2 / (f + 1.2*(0.25+0.75*float64(items[i].length)/avg))
-		}
-	}
-	sort.Slice(items, func(i, j int) bool {
-		if items[i].score != items[j].score {
-			return items[i].score > items[j].score
-		}
-		if items[i].row.TS != items[j].row.TS {
-			return items[i].row.TS > items[j].row.TS
-		}
-		return items[i].row.ID > items[j].row.ID
-	})
-	for i := range rows {
-		rows[i] = items[i].row
-	}
-}
 func transcript(ctx context.Context, db *sql.DB, uid string) ([]message, error) {
 	rows, e := db.QueryContext(ctx, "SELECT id,idx,ts,role,text FROM messages WHERE session_uid=? ORDER BY idx", uid)
 	if e != nil {
