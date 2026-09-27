@@ -3,3 +3,5 @@ hindsight
 .impeccable/*.png
 .impeccable/probe.html
 .gstack/
+internal-docs/
+test/out/
