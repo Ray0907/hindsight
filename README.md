@@ -2,6 +2,8 @@
 
 Search local Claude Code, Codex and Pi transcripts at message granularity, including Chinese, Japanese and Korean. macOS only (Phase 1).
 
+![hindsight searching "auth" across Claude, Codex and Pi sessions (synthetic data)](docs/demo.png)
+
 ## Install
 
 ### Download (macOS)
