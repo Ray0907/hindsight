@@ -1,14 +1,14 @@
 hindsight ▸ snapshot                                                                             6 messages · 3 sessions
 highlights none · press h in results to add
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-     demo  <fixture>/home/work/demo  2026-09-27  codex
-✱  10:05 you   Search for snapshot, resum, json_extract, low-water, S3, and cjk.c.
-✱  10:05 asst  SNAPSHOT is ready; resuming is safe, but a shorter prefix is not a match. The phrase is black tea.
+     demo  <fixture>/home/work/demo  2026-09-27  claude
+✱  10:00 you   Find the snapshot and resume path; resuming should preserve JSON output.
+✱  10:00 asst  SNAPSHOT: json_extract handles low-water marks, S3 uploads, cjk.c, and naïve input.
 
-   10:06 you   魚池 appears inside 日月潭紅茶產於南投縣魚池鄉. 日本語の検索と 한국어 검색.
-   10:06 asst  紅茶 is tea; single-character 茶 should match. naïve accents are searchable.
+   10:01 you   紅茶: 日月潭紅茶產於南投縣魚池鄉。魚池と紅茶を探す。한국어 검색도 확인합니다.
+   10:01 asst  茶 is searchable; 日本語の議事録と 한국어 세션도 이 fixture에 있습니다.
 
-   10:07 you   Parser continues after malformed line: recoverytoken.
+   10:02 you   Parser continues after malformed line: recoverytoken.
 
    10:30 you   cutprobe alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu supercalifragilisticexpial
                idocious tail

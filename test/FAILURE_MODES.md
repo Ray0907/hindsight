@@ -1,6 +1,6 @@
 # E2E failure modes
 
-Use a fresh synthetic `HOME` from `./test/fixture.sh` for every run. Run all commands from a working directory that is not the real project/session cwd. These are user-visible failures, not implementation suggestions.
+Use a fresh synthetic `HOME` from `./test/fixture.sh` for every run. Run all commands from a working directory that is not the real project/session cwd. The real-store lower-bound sanity is opt-in (`HINDSIGHT_E2E_REAL=1`); default suite runs never inspect real stores. These are user-visible failures, not implementation suggestions.
 
 ## Discovery, parsing, and privacy
 

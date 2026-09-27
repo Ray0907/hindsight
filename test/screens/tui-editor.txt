@@ -1,21 +1,20 @@
 hindsight ▸ snapshot                                                         6 messages · 3 sessions
 highlights none · press h in results to add
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-▌ Search for snapshot, resum, json_extract, low-water, S3, and cjk.c.    codex   demo             0m
-▌ Find SNAPSHOT and resuming; test S3, json_extract, low-water, and cjk… pi      demo             0m
-▌ Find the snapshot and resume path; resuming should preserve JSON…      claude  demo             0m
-▌ SNAPSHOT: json_extract handles low-water marks, S3 uploads, cjk.c,…    claude  demo             0m
-▌ A snapshot can resume safely; the phrase is black tea, and naïve…      pi      demo             0m
-▌ SNAPSHOT is ready; resuming is safe, but a shorter prefix is not a…    codex   demo             0m
+▌ Find the snapshot and resume path; resuming should preserve JSON…      claude  demo            25m
+▌ Search for snapshot, resum, json_extract, low-water, S3, and cjk.c.    codex   demo            20m
+▌ Find SNAPSHOT and resuming; test S3, json_extract, low-water, and cjk… pi      demo            15m
+▌ SNAPSHOT: json_extract handles low-water marks, S3 uploads, cjk.c,…    claude  demo            24m
+▌ A snapshot can resume safely; the phrase is black tea, and naïve…      pi      demo            14m
+▌ SNAPSHOT is ready; resuming is safe, but a shorter prefix is not a…    codex   demo            19m
 
 
 
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────
      demo  <fixture>/home/work/demo…
-✱  10:05 you   Search for snapshot, resum, json_extract, low-water, S3, and cjk.c.
-✱  10:05 asst  SNAPSHOT is ready; resuming is safe, but a shorter prefix is not a match. The phrase
-               is black tea.
+✱  10:00 you   Find the snapshot and resume path; resuming should preserve JSON output.
+✱  10:00 asst  SNAPSHOT: json_extract handles low-water marks, S3 uploads, cjk.c, and naïve input.
      ⋯
 
 
@@ -27,6 +26,7 @@ highlights none · press h in results to add
 
 
 
+
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-17:49 opened <fixture>/home/work/demo…
+18:25 opened <fixture>/home/work/demo…
 ↑↓ move  n/N next hit  h highlight  H clear  v full  o open in <fixture>

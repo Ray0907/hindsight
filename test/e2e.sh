@@ -5,7 +5,8 @@ REPORT="$TEST/e2e-report.md"; SCREENS="$TEST/screens"; mkdir -p "$SCREENS"
 printf '# E2E report\n\nRun: %s\n\n| Check | Result | Time | Details |\n|---|---:|---:|---|\n' "$(date -u '+%Y-%m-%d %H:%M:%S UTC')" > "$REPORT"
 PASS=0; FAIL=0
 : > "$TEST/BUGS.md"
-record(){ local name=$1 res=$2 sec=$3 detail=${4:-} expected='check passes per test/FAILURE_MODES.md' repro='test/e2e.sh'; detail=${detail//|/\\|}; detail=${detail//$'\n'/ }; printf '| %s | %s | %ss | %s |\n' "$name" "$res" "$sec" "$detail" >> "$REPORT"; if [[ $res == PASS ]]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); if [[ $name == Performance:* ]]; then expected='p95 over 20 varied query latencies is <= 200ms'; repro='test/e2e.sh (200k-message fixture)'; fi; if [[ $name == Hit-list* ]]; then expected='each clipped hit snippet ends with ellipsis and no Latin word is cut'; fi; failbug "$name" "$repro" "$expected" "$detail"; fi; }
+record(){ local name=$1 res=$2 sec=$3 detail=${4:-} expected='check passes per test/FAILURE_MODES.md' repro='test/e2e.sh'; detail=${detail//|/\\|}; detail=${detail//$'\n'/ }; printf '| %s | %s | %ss | %s |\n' "$name" "$res" "$sec" "$detail" >> "$REPORT"; if [[ $res == PASS ]]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); if [[ $name == Performance:* ]]; then expected='p95 over 20 varied query latencies is <= 200ms'; repro='test/e2e.sh (200k-message fixture)'; fi; if [[ $name == Hit-list* ]]; then expected='each clipped hit snippet ends with ellipsis and no Latin word is cut'; fi; if [[ $name == Search\ semantics:* ]]; then expected='common-word results include the newest Claude message and results outside the last-indexed Pi file'; fi; failbug "$name" "$repro" "$expected" "$detail"; fi; }
+skip(){ printf '| %s | SKIP | 0s | %s |\n' "$1" "$2" >> "$REPORT"; }
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/hindsight-e2e.XXXXXX")
 cleanup(){ tmux kill-session -t "htrunc-$$" 2>/dev/null || :; tmux kill-session -t "he2e-$$" 2>/dev/null || :; tmux kill-session -t "hrsm-$$" 2>/dev/null || :; tmux kill-session -t "hrsm-codex-$$" 2>/dev/null || :; tmux kill-session -t "hrsm-pi-$$" 2>/dev/null || :; tmux kill-session -t "hedt-$$" 2>/dev/null || :; rm -rf "$TMP"; }
 trap cleanup EXIT
@@ -168,6 +169,16 @@ for i in range(2000):
    text='perfneedle large fixture message 魚池 紅茶 日本語 한국어' if j==0 else f'neutral synthetic message {j}'
    f.write(json.dumps({'timestamp':'2026-09-27T10:00:01Z','type':'response_item','payload':{'type':'message','role':role,'content':[{'type':typ,'text':text}]}})+'\n')
 PY
+python3 - <<'PY'
+import json,os,pathlib
+root=pathlib.Path(os.environ['PERF'])
+claude=root/'.claude/projects/newest-first/000-new.jsonl'; claude.parent.mkdir(parents=True)
+rows=[{'type':'user','uuid':'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1','timestamp':'2026-10-01T10:00:00Z','cwd':'/work/new','sessionId':'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','message':{'role':'user','content':'synthetic newest session'}},{'type':'assistant','uuid':'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2','timestamp':'2026-10-01T10:00:01Z','cwd':'/work/new','sessionId':'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','message':{'role':'assistant','content':[{'type':'text','text':'synthetic NEWEST_MATCH_MARKER'}]}}]
+claude.write_text('\n'.join(json.dumps(x) for x in rows)+'\n')
+pi=root/'.pi/agent/sessions/zz-old/999-old.jsonl'; pi.parent.mkdir(parents=True)
+rows=[{'type':'session','version':3,'id':'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','timestamp':'2025-01-01T00:00:00Z','cwd':'/work/old'},{'type':'message','id':'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1','timestamp':'2025-01-01T00:00:01Z','message':{'role':'user','content':[{'type':'text','text':'synthetic OLDEST_MATCH_MARKER'}]}}]
+pi.write_text('\n'.join(json.dumps(x) for x in rows)+'\n')
+PY
 export HOME="$PERF" HINDSIGHT_INDEX="$TMP/perf.db"
 python3 - "$BIN" "$TMP/perf-metrics.json" <<'PY'
 import json,math,os,statistics,subprocess,sys,time
@@ -184,6 +195,19 @@ json.dump({'index_rc':index.returncode,'index_out':index.stdout+index.stderr,'in
 PY
 metrics=$(<"$TMP/perf-metrics.json"); index_ms=$(jq -r .index_ms <<<"$metrics"); median_ms=$(jq -r .median_ms <<<"$metrics"); p95_ms=$(jq -r .p95_ms <<<"$metrics"); failures=$(jq -r '.failures|length' <<<"$metrics"); index_rc=$(jq -r .index_rc <<<"$metrics"); details="index=${index_ms}ms queries=$(jq -r .n <<<"$metrics") median=${median_ms}ms p95=${p95_ms}ms slowest=$(jq -c .slowest <<<"$metrics")"
 if ((index_rc==0 && failures==0)) && grep -q '200000 messages' <<<"$(jq -r .index_out <<<"$metrics")" && awk -v p="$p95_ms" 'BEGIN{exit !(p<=200)}'; then record 'Performance: 2k sessions / 200k messages (20 varied queries)' PASS 0 "$details"; else record 'Performance: 2k sessions / 200k messages (20 varied queries)' FAIL 0 "$details; index_rc=$index_rc query_failures=$failures $(jq -r .index_out <<<"$metrics")"; fi
+
+# Very common term: newest session file is indexed first, oldest matching file last.
+start=$SECONDS; semantic=$("$BIN" --json synthetic 2>&1); semantic_rc=$?; printf '%s\n' "$semantic" > "$SCREENS/common-word.jsonl"
+if ((semantic_rc==0)) && python3 - "$SCREENS/common-word.jsonl" > "$TMP/semantic-summary.txt" 2> "$TMP/semantic-error.txt" <<'PY'
+import json,sys
+rows=[json.loads(x) for x in open(sys.argv[1]) if x.strip()]
+harnesses={r['harness'] for r in rows}; newest=[r for r in rows if 'NEWEST_MATCH_MARKER' in r['text']]
+assert 'claude' in harnesses and 'codex' in harnesses, f'only harnesses in common-word results: {sorted(harnesses)}'
+assert newest, 'the 2026 newest match was absent from the top results'
+assert max(r['ts'] for r in rows)=='2026-10-01T10:00:01Z', f'newest result timestamp was {max(r["ts"] for r in rows)}'
+print(f'{len(rows)} rows; harnesses={sorted(harnesses)}; newest={newest[0]["ts"]}')
+PY
+then record 'Search semantics: common term is ranked by message time, not insertion order' PASS $((SECONDS-start)) "$(<"$TMP/semantic-summary.txt")"; else record 'Search semantics: common term is ranked by message time, not insertion order' FAIL $((SECONDS-start)) "exit=$semantic_rc error=$(<"$TMP/semantic-error.txt") output=$(tail -3 "$SCREENS/common-word.jsonl")"; fi
 
 # Appends (including an incomplete final record) must be ingested without rebuilding the corpus.
 append_file="$PERF/.codex/sessions/2026/09/27/rollout-0000.jsonl"
@@ -202,6 +226,7 @@ cat "$TMP/partial-rest" >> "$append_file"; completed=$("$BIN" --json partialtoke
 if grep -q partialtoken <<<"$completed" && grep -q 'codex: 200002 messages' <<<"$complete_index" && grep -q '0 changed' <<<"$complete_index"; then record 'Partial line is re-read and indexed when completed' PASS 0 "$complete_index"; else record 'Partial line is re-read and indexed when completed' FAIL 0 "query=$completed index=$complete_index"; fi
 
 # Independent read-only real-store count versus app indexing with an isolated DB.
+if [[ ${HINDSIGHT_E2E_REAL:-0} == 1 ]]; then
 REALHOME="$REALHOME_DEFAULT"; REALTMP="$TMP/real"; mkdir -p "$REALTMP"; export REALHOME REALTMP
 python3 - <<'PY' > "$REALTMP/independent.txt"
 import glob,json,os
@@ -241,6 +266,9 @@ for h,n in ind.items():
  if n and not a: print(f'{h}: independent={n}, indexed=0'); sys.exit(1)
 PY
 then record 'Real stores: read-only independent lower-bound sanity' PASS $((SECONDS-start)) "$(tr '\n' ';' < "$SCREENS/real-store-counts.txt"); lower-bound only: indexed counts include tool rows and split content blocks"; else record 'Real stores: read-only independent lower-bound sanity' FAIL $((SECONDS-start)) "$realout; $(tr '\n' ';' < "$SCREENS/real-store-counts.txt")"; failbug 'Real store message undercount' 'HINDSIGHT_INDEX=<temp>/index.db ./hindsight index --rebuild; compare to test/screens/real-store-counts.txt' 'indexed rows >= independent user/assistant text blocks' "$realout; see test/screens/real-store-counts.txt"; fi
+else
+  skip 'Real stores: read-only independent lower-bound sanity' 'Set HINDSIGHT_E2E_REAL=1 to opt in to reading this machine’s ~/.claude, ~/.codex, and ~/.pi stores.'
+fi
 
 printf '\n**Summary:** %d PASS, %d FAIL.\n' "$PASS" "$FAIL" >> "$REPORT"
 printf '%d PASS / %d FAIL — report: test/e2e-report.md\n' "$PASS" "$FAIL"
