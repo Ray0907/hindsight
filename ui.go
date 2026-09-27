@@ -13,7 +13,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
-	"github.com/mattn/go-runewidth"
 	"github.com/muesli/termenv"
 	"github.com/rivo/uniseg"
 	"golang.org/x/text/unicode/norm"
@@ -436,7 +435,7 @@ func (m model) mouseUpdate(x tea.MouseMsg) (tea.Model, tea.Cmd) {
 		if x.Y == 1 {
 			col := len("highlights ")
 			for i, p := range m.pens {
-				w := runewidth.StringWidth(p.word) + 2
+				w := displayWidth(displayInline(p.word)) + 2
 				if x.X >= col && x.X < col+w {
 					m.pens = append(m.pens[:i], m.pens[i+1:]...)
 					break
@@ -479,7 +478,7 @@ func (m model) listHeight() int {
 	return max(2, (m.height-5)*38/100)
 }
 func (m model) color(s, c string) string {
-	return lipgloss.NewStyle().Foreground(lipgloss.Color(c)).Render(s)
+	return lipgloss.NewStyle().Foreground(lipgloss.Color(c)).Render(displayInline(s))
 }
 func (m model) dim(s string) string { return "\x1b[2m" + s + "\x1b[22m" }
 func (m model) band(h string) string {
@@ -492,8 +491,42 @@ func (m model) band(h string) string {
 		return m.pal.pi
 	}
 }
+
+// ANSI-aware grapheme width; ambiguous-width characters occupy one cell.
+func displayWidth(s string) int { return ansi.StringWidth(s) }
+
+func displayText(s string, multiline bool) string {
+	s = ansi.Strip(strings.ReplaceAll(s, "\r\n", "\n"))
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r == '\n' || r == '\r':
+			if multiline {
+				b.WriteByte('\n')
+			} else {
+				b.WriteByte(' ')
+			}
+		case r == '\t':
+			if multiline {
+				b.WriteString("    ")
+			} else {
+				b.WriteByte(' ')
+			}
+		case unicode.IsControl(r) || unicode.Is(unicode.Cf, r) && r != '\u200c' && r != '\u200d':
+			// Escape and bidi controls must not steer the terminal or reorder text.
+		case unicode.IsSpace(r):
+			b.WriteByte(' ')
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+func displayInline(s string) string     { return displayText(s, false) }
+func displayTranscript(s string) string { return displayText(s, true) }
+
 func pad(s string, n int) string {
-	w := lipgloss.Width(s)
+	w := displayWidth(s)
 	if w >= n {
 		return s
 	}
@@ -503,17 +536,17 @@ func clip(s string, n int) string {
 	if n <= 0 {
 		return ""
 	}
-	if uniseg.StringWidth(s) <= n {
+	if displayWidth(s) <= n {
 		return s
 	}
 	g := uniseg.NewGraphemes(s)
 	end, cells := 0, 0
 	for g.Next() {
-		if cells+g.Width() > n-1 {
+		if cells+displayWidth(g.Str()) > n-1 {
 			break
 		}
 		_, end = g.Positions()
-		cells += g.Width()
+		cells += displayWidth(g.Str())
 	}
 	prefix := s[:end]
 	if end < len(s) {
@@ -565,19 +598,24 @@ func (m model) paint(s string, query bool) string {
 		}
 	}
 	var b strings.Builder
-	for i, c := range r {
-		s := string(c)
-		style := lipgloss.NewStyle()
-		if h[i] {
-			style = style.Foreground(lipgloss.Color(m.pal.hit)).Underline(true).Bold(true)
+	for i := 0; i < len(r); {
+		j := i + 1
+		for j < len(r) && h[j] == h[i] && marks[j] == marks[i] {
+			j++
 		}
-		if marks[i] >= 0 {
-			style = style.Background(lipgloss.Color(m.pal.pens[marks[i]]))
-		}
+		s := string(r[i:j])
 		if h[i] || marks[i] >= 0 {
+			style := lipgloss.NewStyle()
+			if h[i] {
+				style = style.Foreground(lipgloss.Color(m.pal.hit)).Underline(true).Bold(true)
+			}
+			if marks[i] >= 0 {
+				style = style.Background(lipgloss.Color(m.pal.pens[marks[i]]))
+			}
 			s = style.Render(s)
 		}
 		b.WriteString(s)
+		i = j
 	}
 	return b.String()
 }
@@ -607,7 +645,7 @@ func positions(r []rune, word string) []int {
 }
 func (m model) View() string {
 	if m.width < 25 || m.height < 10 {
-		return "hindsight · enlarge terminal\n"
+		return fitLine("hindsight · enlarge terminal", max(0, m.width))
 	}
 	w := m.width
 	var b strings.Builder
@@ -624,12 +662,12 @@ func (m model) View() string {
 		count = fmt.Sprintf("%d messages · %d sessions", len(m.rows), len(sessions))
 	}
 	q := m.color("hindsight", m.pal.ink) + " " + m.color("▸", m.pal.muted) + " "
-	input := m.q
+	input := displayInline(m.q)
 	if m.focus {
 		input += "▌"
 	}
 	right := m.color(count, m.pal.muted)
-	line := q + pad(clip(input, max(1, w-lipgloss.Width(q)-lipgloss.Width(right)-2)), max(1, w-lipgloss.Width(q)-lipgloss.Width(right))) + right
+	line := q + pad(clip(input, max(1, w-displayWidth(q)-displayWidth(right)-2)), max(1, w-displayWidth(q)-displayWidth(right))) + right
 	if !m.focus {
 		line = m.dim(line)
 	}
@@ -639,7 +677,7 @@ func (m model) View() string {
 		ps += m.color("none · press h in results to add", m.pal.muted)
 	}
 	for _, p := range m.pens {
-		ps += lipgloss.NewStyle().Background(lipgloss.Color(m.pal.pens[p.color])).Render(" "+p.word+" ") + " "
+		ps += lipgloss.NewStyle().Background(lipgloss.Color(m.pal.pens[p.color])).Render(" "+displayInline(p.word)+" ") + " "
 	}
 	ps = clipANSI(ps, w)
 	if !m.focus {
@@ -664,8 +702,8 @@ func (m model) View() string {
 			pjW := 12
 			ageW := 7
 			sw := max(5, w-agW-pjW-ageW-3)
-			sn := clip(x.Snippet, sw)
-			row := m.color("▌", m.band(x.Harness)) + " " + pad(m.paint(sn, true), sw) + " " + pad(m.color(x.Harness, m.band(x.Harness)), agW) + pad(m.color(clip(x.Project, pjW-1), m.pal.muted), pjW) + m.color(fmt.Sprintf("%*s", ageW, age(x.TS)), m.pal.muted)
+			sn := clip(displayInline(x.Snippet), sw)
+			row := m.color("▌", m.band(x.Harness)) + " " + pad(m.paint(sn, true), sw) + " " + pad(m.color(x.Harness, m.band(x.Harness)), agW) + pad(m.color(clip(displayInline(x.Project), pjW-1), m.pal.muted), pjW) + m.color(fmt.Sprintf("%*s", ageW, age(x.TS)), m.pal.muted)
 			if idx == m.sel {
 				row = lipgloss.NewStyle().Background(lipgloss.Color(m.pal.selbg)).Render(row)
 			}
@@ -698,12 +736,12 @@ func (m model) View() string {
 	}
 	b.WriteString(rule + "\n")
 	if m.prompt {
-		b.WriteString(m.color("highlight ▸ ", m.pal.ink) + m.status + "▌  enter add · esc cancel")
+		b.WriteString(m.color("highlight ▸ ", m.pal.ink) + displayInline(m.status) + "▌  enter add · esc cancel")
 	} else if m.help {
 		b.WriteString("focus · query · ↑↓ · n/N · h/H · v · o · y · enter · tab · ctrl+c")
 	} else {
 		if m.status != "" {
-			b.WriteString(m.color(clip(m.status, w), m.pal.ink) + "\n")
+			b.WriteString(m.color(clip(displayInline(m.status), w), m.pal.ink) + "\n")
 		}
 		if m.focus {
 			b.WriteString(m.color("type to search   ↓/esc results   enter resume   tab agent", m.pal.muted))
@@ -712,7 +750,11 @@ func (m model) View() string {
 			b.WriteString(m.color(clip("↑↓ move  n/N next hit  h highlight  H clear  v full  o open in "+label+"  y copy  enter resume  / search  ?", w), m.pal.muted))
 		}
 	}
-	return b.String()
+	rendered := strings.Split(b.String(), "\n")
+	for i := range rendered {
+		rendered[i] = fitLine(rendered[i], w)
+	}
+	return strings.Join(rendered, "\n")
 }
 func clipANSI(s string, w int) string {
 	if w <= 0 {
@@ -723,7 +765,11 @@ func clipANSI(s string, w int) string {
 	if plain == short {
 		return s
 	}
-	return ansi.Truncate(s, ansi.StringWidth(strings.TrimSuffix(short, "…"))+1, "…") + "\x1b[0m"
+	return ansi.Truncate(s, displayWidth(strings.TrimSuffix(short, "…"))+1, "…") + "\x1b[0m"
+}
+func fitLine(s string, w int) string {
+	s = clipANSI(s, w)
+	return s + strings.Repeat(" ", max(0, w-displayWidth(s)))
 }
 func (m model) pageLines(w int) []string {
 	if m.help {
@@ -772,7 +818,7 @@ func (m model) pageLines(w int) []string {
 		if x.Role == "user" && prev >= 0 {
 			out = append(out, "")
 		}
-		who := x.Role
+		who := clip(displayInline(x.Role), 5)
 		if who == "user" {
 			who = "you"
 		}
@@ -784,12 +830,12 @@ func (m model) pageLines(w int) []string {
 		if len(stamp) >= 16 {
 			stamp = stamp[11:16]
 		}
-		prefix := star + " " + m.color(fmt.Sprintf("%-5s", stamp), m.pal.muted) + " " + m.color(fmt.Sprintf("%-5s", who), m.pal.muted) + " "
+		prefix := star + " " + m.color(fmt.Sprintf("%-5s", stamp), m.pal.muted) + " " + m.color(pad(who, 5), m.pal.muted) + " "
 		if who == "you" {
-			prefix = star + " " + m.color(fmt.Sprintf("%-5s", stamp), m.pal.muted) + " " + m.color(fmt.Sprintf("%-5s", who), m.pal.ink) + " "
+			prefix = star + " " + m.color(fmt.Sprintf("%-5s", stamp), m.pal.muted) + " " + m.color(pad(who, 5), m.pal.ink) + " "
 		}
 		textW := max(5, w-15)
-		for j, line := range wrap(x.Text, textW) {
+		for j, line := range wrap(displayTranscript(x.Text), textW) {
 			p := prefix
 			if j > 0 {
 				p = strings.Repeat(" ", 15)
@@ -834,27 +880,28 @@ func gap(a, b string) bool {
 func wrap(s string, w int) []string {
 	var out []string
 	for _, ln := range strings.Split(s, "\n") {
-		r := []rune(ln)
-		if len(r) == 0 {
+		if ln == "" {
 			out = append(out, "")
 			continue
 		}
-		for len(r) > 0 {
-			width := 0
-			n := 0
-			for n < len(r) {
-				v := runewidth.RuneWidth(r[n])
-				if width+v > w {
+		for len(ln) > 0 {
+			g := uniseg.NewGraphemes(ln)
+			end, cells := 0, 0
+			for g.Next() {
+				v := displayWidth(g.Str())
+				if cells+v > w {
 					break
 				}
-				width += v
-				n++
+				_, end = g.Positions()
+				cells += v
 			}
-			if n == 0 {
-				n = 1
+			if end == 0 {
+				g = uniseg.NewGraphemes(ln)
+				g.Next()
+				_, end = g.Positions()
 			}
-			out = append(out, string(r[:n]))
-			r = r[n:]
+			out = append(out, ln[:end])
+			ln = ln[end:]
 		}
 	}
 	return out

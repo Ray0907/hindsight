@@ -8,8 +8,6 @@ import (
 	"strings"
 	"time"
 	"unicode"
-
-	"github.com/mattn/go-runewidth"
 )
 
 var termsRE = regexp.MustCompile(`(-?)"([^"]+)"|(-?)(\S+)`)
@@ -185,7 +183,7 @@ func transcript(ctx context.Context, db *sql.DB, uid string) ([]message, error) 
 	return out, rows.Err()
 }
 func snippet(text string, ts []term) string {
-	text = strings.ReplaceAll(text, "\n", " ")
+	text = displayInline(text)
 	r := []rune(text)
 	start := 0
 	for _, t := range ts {
@@ -202,7 +200,7 @@ func snippet(text string, ts []term) string {
 		}
 		for cells := 0; start > 0 && cells < 12; {
 			start--
-			cells += runewidth.RuneWidth(r[start])
+			cells += displayWidth(string(r[start]))
 		}
 		if start > 0 && start < len(r) && unicode.IsLetter(r[start-1]) && !isCJK(r[start]) {
 			for start > 0 && !unicode.IsSpace(r[start-1]) && !isCJK(r[start-1]) {
