@@ -49,11 +49,12 @@ func run() error {
 			*harness = strings.TrimPrefix(a, "--harness=")
 			continue
 		}
-		if strings.HasPrefix(a, "--") {
+		switch a {
+		case "--rebuild", "--json", "--no-mouse", "--version":
 			if e := fs.Parse([]string{a}); e != nil {
 				return e
 			}
-		} else {
+		default:
 			words = append(words, a)
 		}
 	}

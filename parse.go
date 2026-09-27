@@ -60,6 +60,11 @@ func parseFile(path, h string) (session, error) {
 	defer f.Close()
 	s := session{UID: h + ":" + path, Harness: h, Path: path, NativeID: strings.TrimSuffix(filepath.Base(path), ".jsonl")}
 	r := bufio.NewReader(f)
+	info, _ := f.Stat()
+	fallbackTS := "1970-01-01T00:00:00Z"
+	if info != nil {
+		fallbackTS = info.ModTime().UTC().Format(time.RFC3339Nano)
+	}
 	var latest string
 	var callNames = map[string]string{}
 	add := func(ts, role, text string) {
@@ -77,7 +82,7 @@ func parseFile(path, h string) (session, error) {
 			ts = latest
 		}
 		if ts == "" {
-			ts = time.Now().UTC().Format(time.RFC3339)
+			ts = fallbackTS
 		}
 		s.Messages = append(s.Messages, message{Index: len(s.Messages), TS: ts, Role: role, Text: text})
 		if s.Started == "" {

@@ -55,6 +55,9 @@ CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(text, content='messag
 CREATE TRIGGER IF NOT EXISTS messages_ai AFTER INSERT ON messages BEGIN INSERT INTO messages_fts(rowid,text) VALUES(new.id,new.text); END;
 CREATE TRIGGER IF NOT EXISTS messages_ad AFTER DELETE ON messages BEGIN INSERT INTO messages_fts(messages_fts,rowid,text) VALUES('delete',old.id,old.text); END;
 INSERT INTO meta(schema_version) SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM meta);`)
+	if e == nil {
+		e = os.Chmod(path, 0600)
+	}
 	if e != nil {
 		db.Close()
 		return nil, e
@@ -73,7 +76,9 @@ func syncIndex(db *sql.DB, rebuild bool, progress func(int, int)) (syncStats, er
 	for h, root := range roots() {
 		err := filepath.WalkDir(root, func(p string, d os.DirEntry, e error) error {
 			if e != nil {
-				stats.Skipped++
+				if !errors.Is(e, os.ErrNotExist) {
+					stats.Skipped++
+				}
 				return nil
 			}
 			if !d.IsDir() && strings.HasSuffix(p, ".jsonl") {

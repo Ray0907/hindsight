@@ -6,6 +6,8 @@ import (
 	"regexp"
 	"strings"
 	"unicode"
+
+	"github.com/mattn/go-runewidth"
 )
 
 var termsRE = regexp.MustCompile(`(-?)"([^"]+)"|(-?)(\S+)`)
@@ -137,11 +139,12 @@ func snippet(text string, ts []term) string {
 		if t.Negative {
 			continue
 		}
-		i := strings.Index(strings.ToLower(text), strings.ToLower(t.Word))
-		if i >= 0 {
-			start = len([]rune(text[:i])) - 12
-			if start < 0 {
-				start = 0
+		found := positions(r, t.Word)
+		if len(found) > 0 {
+			start = found[0]
+			for cells := 0; start > 0 && cells < 12; {
+				start--
+				cells += runewidth.RuneWidth(r[start])
 			}
 			if start > 0 && start < len(r) && unicode.IsLetter(r[start-1]) && !isCJK(r[start]) {
 				for start > 0 && !unicode.IsSpace(r[start-1]) && !isCJK(r[start-1]) {

@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-runewidth"
 	"github.com/muesli/termenv"
+	"golang.org/x/text/unicode/norm"
 )
 
 type palette struct {
@@ -112,6 +113,12 @@ func (m *model) load() {
 	m.cursor = -1
 	if m.sel >= len(m.rows) {
 		m.sel = max(0, len(m.rows)-1)
+	}
+	if m.sel < m.offset {
+		m.offset = m.sel
+	}
+	if m.sel >= m.offset+m.listHeight() {
+		m.offset = m.sel - m.listHeight() + 1
 	}
 	if len(m.rows) > 0 {
 		m.messages, _ = transcript(m.db, m.rows[m.sel].UID)
@@ -478,6 +485,15 @@ func (m model) paint(s string, query bool) string {
 	}
 	return b.String()
 }
+func fold(s string) string {
+	var b strings.Builder
+	for _, r := range norm.NFD.String(strings.ToLower(s)) {
+		if !unicode.Is(unicode.Mn, r) {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
 func positions(r []rune, word string) []int {
 	w := []rune(strings.ToLower(word))
 	if len(w) == 0 {
@@ -485,7 +501,7 @@ func positions(r []rune, word string) []int {
 	}
 	var out []int
 	for i := 0; i+len(w) <= len(r); i++ {
-		if string([]rune(strings.ToLower(string(r[i:i+len(w)])))) == string(w) {
+		if fold(string(r[i:i+len(w)])) == fold(word) {
 			if isCJK(w[0]) || i == 0 || (!unicode.IsLetter(r[i-1]) && !unicode.IsDigit(r[i-1])) {
 				out = append(out, i)
 			}
@@ -538,12 +554,6 @@ func (m model) View() string {
 	b.WriteString(rule + "\n")
 	listH := m.listHeight()
 	if !m.full {
-		if m.sel < m.offset {
-			m.offset = m.sel
-		}
-		if m.sel >= m.offset+listH {
-			m.offset = m.sel - listH + 1
-		}
 		for i := 0; i < listH; i++ {
 			idx := m.offset + i
 			if idx >= len(m.rows) {
