@@ -26,7 +26,7 @@ hindsight index --rebuild    # replace the index
 
 When stdout is not a TTY, search prints JSON Lines automatically. `--version` prints the version; `--no-mouse` disables mouse input. The initial scan runs on first use; the TUI opens with its existing index and refreshes when the scan finishes.
 
-Search: space means AND; `"black tea"` is an exact phrase; `-word` excludes; bare words are prefixes (`resum` finds `resuming`); `--flag` is a literal. CJK terms match inside text, including single characters. Empty or negative-only queries show the latest message of each recent session. Results are ranked by BM25, limited to 300 messages.
+Search: space means AND; `"black tea"` is an exact phrase; `-word` excludes; bare words are prefixes (`resum` finds `resuming`); `--flag` is a literal. CJK terms match inside text, including single characters. Empty or negative-only queries show the latest message of each recent session. The newest 320 matching messages are ranked with bounded BM25 scoring; up to 300 are shown. This keeps common queries fast without scoring the entire corpus.
 
 | Key | Action |
 | --- | --- |
@@ -50,6 +50,6 @@ Editor resolution: `HINDSIGHT_EDITOR`, then `VISUAL`, then the first available `
 
 ## Data and privacy
 
-**Local-only and read-only:** transcript stores are never changed or uploaded. The only persistent writes are the search index under `$XDG_CACHE_HOME/hindsight/index.db` (or `~/.cache/hindsight/index.db`). Override it with `HINDSIGHT_INDEX`; override source roots independently with `HINDSIGHT_CLAUDE_DIR`, `HINDSIGHT_CODEX_DIR`, `HINDSIGHT_PI_DIR`. `$HOME` controls the default roots.
+**Local-only and read-only:** transcript stores are never changed or uploaded. The only persistent writes are the search index under `$XDG_CACHE_HOME/hindsight/index.db` (or `~/.cache/hindsight/index.db`). Override it with `HINDSIGHT_INDEX`; override source roots independently with `HINDSIGHT_CLAUDE_DIR`, `HINDSIGHT_CODEX_DIR`, `HINDSIGHT_PI_DIR`. `$HOME` controls the default roots. Set `HINDSIGHT_DEBUG_TIMING=1` for startup/sync/query/hydration/snippet/render timings on stderr.
 
 Search tokenization uses [fts5-cjk](https://github.com/Ray0907/fts5-cjk), statically linked under its original license in `internal/cjk/`.

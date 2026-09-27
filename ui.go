@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"os"
@@ -46,10 +47,19 @@ type model struct {
 	resume                           *hit
 	pal                              palette
 	offset                           int
+	cancel, loadCancel               context.CancelFunc
+	loadRevision                     int
+	initial                          tea.Cmd
 }
 type resultMsg struct {
 	revision int
 	rows     []hit
+	err      error
+}
+type loadMsg struct {
+	revision int
+	messages []message
+	hits     map[int]bool
 	err      error
 }
 type syncMsg struct {
@@ -65,10 +75,10 @@ func newModel(db *sql.DB, q, h string, rows []hit, mouse bool) model {
 		p = dark
 	}
 	m := model{db: db, q: q, harness: h, rows: rows, mouse: mouse, pal: p, width: 80, height: 24, cursor: -1, focus: true}
-	m.load()
+	m.initial = m.requestLoad()
 	return m
 }
-func (m model) Init() tea.Cmd { return startSync() }
+func (m model) Init() tea.Cmd { return tea.Batch(startSync(), m.initial) }
 func startSync() tea.Cmd {
 	ch := make(chan syncMsg, 32)
 	go func() {
@@ -107,10 +117,28 @@ type syncEnvelope struct {
 	ch <-chan syncMsg
 }
 
-func queryCmd(db *sql.DB, q, h string, rev int) tea.Cmd {
-	return func() tea.Msg { rows, e := search(db, q, h); return resultMsg{rev, rows, e} }
+func queryCmd(ctx context.Context, db *sql.DB, q, h string, rev int) tea.Cmd {
+	return func() tea.Msg { rows, e := search(ctx, db, q, h); return resultMsg{rev, rows, e} }
 }
-func (m *model) load() {
+func (m *model) requestQuery() tea.Cmd {
+	if m.cancel != nil {
+		m.cancel()
+	}
+	if m.loadCancel != nil {
+		m.loadCancel()
+	}
+	m.loadRevision++
+	m.messages = nil
+	m.hitIndex = map[int]bool{}
+	ctx, cancel := context.WithCancel(context.Background())
+	m.cancel = cancel
+	return queryCmd(ctx, m.db, m.q, m.harness, m.revision)
+}
+func (m *model) requestLoad() tea.Cmd {
+	if m.loadCancel != nil {
+		m.loadCancel()
+	}
+	m.loadRevision++
 	m.messages = nil
 	m.hitIndex = map[int]bool{}
 	m.cursor = -1
@@ -123,25 +151,47 @@ func (m *model) load() {
 	if m.sel >= m.offset+m.listHeight() {
 		m.offset = m.sel - m.listHeight() + 1
 	}
-	if len(m.rows) > 0 {
-		m.messages, _ = transcript(m.db, m.rows[m.sel].UID)
-		if fts := toFTS(m.q); fts != "" {
-			rows, err := m.db.Query(`SELECT m.idx FROM messages_fts JOIN messages m ON m.id=messages_fts.rowid WHERE messages_fts MATCH ? AND m.session_uid=?`, fts, m.rows[m.sel].UID)
+	if len(m.rows) == 0 {
+		return nil
+	}
+	selected := m.rows[m.sel]
+	m.cursor = selected.Index
+	ctx, cancel := context.WithCancel(context.Background())
+	m.loadCancel = cancel
+	rev := m.loadRevision
+	q := m.q
+	return func() tea.Msg {
+		msgs, e := transcript(ctx, m.db, selected.UID)
+		hits := map[int]bool{}
+		if e == nil && toFTS(q) != "" {
+			rows, err := m.db.QueryContext(ctx, `SELECT m.idx FROM messages_fts JOIN messages m ON m.id=messages_fts.rowid WHERE messages_fts MATCH ? AND m.session_uid=?`, toFTS(q), selected.UID)
 			if err == nil {
 				for rows.Next() {
-					var idx int
-					if rows.Scan(&idx) == nil {
-						m.hitIndex[idx] = true
+					var i int
+					if rows.Scan(&i) == nil {
+						hits[i] = true
 					}
 				}
+				e = rows.Err()
 				rows.Close()
+			} else {
+				e = err
 			}
 		}
-		m.cursor = m.rows[m.sel].Index
+		return loadMsg{rev, msgs, hits, e}
 	}
 }
 func (m *model) refresh() tea.Cmd {
 	m.revision++
+	if m.cancel != nil {
+		m.cancel()
+	}
+	if m.loadCancel != nil {
+		m.loadCancel()
+	}
+	m.loadRevision++
+	m.messages = nil
+	m.hitIndex = map[int]bool{}
 	return tea.Tick(30*time.Millisecond, func(time.Time) tea.Msg { return debounce(m.revision) })
 }
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -156,22 +206,35 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if x.x.err != nil {
 				m.status = x.x.err.Error()
 			}
-			return m, queryCmd(m.db, m.q, m.harness, m.revision)
+			return m, m.requestQuery()
 		}
 		return m, waitSync(x.ch)
 	case debounce:
 		if int(x) != m.revision {
 			return m, nil
 		}
-		return m, queryCmd(m.db, m.q, m.harness, m.revision)
+		return m, m.requestQuery()
 	case resultMsg:
 		if x.revision == m.revision {
 			if x.err != nil {
-				m.status = x.err.Error()
+				if x.err != context.Canceled {
+					m.status = x.err.Error()
+				}
 			} else {
 				m.rows = x.rows
 				m.sel = 0
-				m.load()
+				return m, m.requestLoad()
+			}
+		}
+	case loadMsg:
+		if x.revision == m.loadRevision {
+			if x.err != nil {
+				if x.err != context.Canceled {
+					m.status = x.err.Error()
+				}
+			} else {
+				m.messages = x.messages
+				m.hitIndex = x.hits
 			}
 		}
 	case tea.MouseMsg:
@@ -179,6 +242,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		key := x.String()
 		if key == "ctrl+c" {
+			if m.cancel != nil {
+				m.cancel()
+			}
+			if m.loadCancel != nil {
+				m.loadCancel()
+			}
 			return m, tea.Quit
 		}
 		if m.prompt {
@@ -223,7 +292,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			m.sel = 0
-			return m, queryCmd(m.db, m.q, m.harness, m.revision)
+			m.revision++
+			return m, m.requestQuery()
 		}
 		if key == "enter" {
 			if len(m.rows) > 0 {
@@ -273,12 +343,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.focus = true
 			} else {
 				m.sel--
-				m.load()
+				return m, m.requestLoad()
 			}
 		case "down", "j":
 			if m.sel+1 < len(m.rows) {
 				m.sel++
-				m.load()
+				return m, m.requestLoad()
 			}
 		case "/":
 			m.focus = true
@@ -381,7 +451,8 @@ func (m model) mouseUpdate(x tea.MouseMsg) (tea.Model, tea.Cmd) {
 			i := m.offset + x.Y - top
 			if i < len(m.rows) {
 				m.sel = i
-				m.load()
+				m.focus = false
+				return m, m.requestLoad()
 			}
 			m.focus = false
 			return m, nil

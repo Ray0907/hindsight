@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+var errNoMessages = errors.New("no messages")
+
 type message struct {
 	ID    int64  `json:"-"`
 	Index int    `json:"-"`
@@ -48,20 +50,28 @@ func textParts(v any, types ...string) []string {
 	}
 	return out
 }
-func parseFile(path, h string) (session, error) {
+func parseFile(path, h string, offset, size int64, base session, startIdx int) (session, int64, error) {
 	f, e := os.Open(path)
 	if e != nil {
-		return session{}, e
+		return session{}, offset, e
 	}
 	defer f.Close()
-	s := session{UID: h + ":" + path, Harness: h, Path: path, NativeID: strings.TrimSuffix(filepath.Base(path), ".jsonl")}
-	r := bufio.NewReader(f)
+	if _, e = f.Seek(offset, io.SeekStart); e != nil {
+		return session{}, offset, e
+	}
+	s := base
+	if offset == 0 {
+		s = session{UID: h + ":" + path, Harness: h, Path: path, NativeID: strings.TrimSuffix(filepath.Base(path), ".jsonl")}
+	}
+	s.Messages = nil
+	r := bufio.NewReader(io.LimitReader(f, size-offset))
+	readOffset := offset
 	info, _ := f.Stat()
 	fallbackTS := "1970-01-01T00:00:00Z"
 	if info != nil {
 		fallbackTS = info.ModTime().UTC().Format(time.RFC3339Nano)
 	}
-	var latest string
+	latest := s.Updated
 	var callNames = map[string]string{}
 	add := func(ts, role, text string) {
 		text = clean(text)
@@ -80,7 +90,7 @@ func parseFile(path, h string) (session, error) {
 		if ts == "" {
 			ts = fallbackTS
 		}
-		s.Messages = append(s.Messages, message{Index: len(s.Messages), TS: ts, Role: role, Text: text})
+		s.Messages = append(s.Messages, message{Index: startIdx + len(s.Messages), TS: ts, Role: role, Text: text})
 		if s.Started == "" {
 			s.Started = ts
 		}
@@ -90,7 +100,12 @@ func parseFile(path, h string) (session, error) {
 		line, err := r.ReadBytes('\n')
 		if len(line) > 0 {
 			var d map[string]any
-			if json.Unmarshal(line, &d) == nil {
+			valid := json.Unmarshal(line, &d) == nil
+			if err == io.EOF && !valid {
+				break
+			} // Retry an incomplete final line after the next append.
+			readOffset += int64(len(line))
+			if valid {
 				ts := str(d["timestamp"])
 				if ts != "" {
 					latest = ts
@@ -250,11 +265,11 @@ func parseFile(path, h string) (session, error) {
 			break
 		}
 		if err != nil {
-			return session{}, err
+			return session{}, readOffset, err
 		}
 	}
-	if len(s.Messages) == 0 {
-		return session{}, errors.New("no messages")
+	if len(s.Messages) == 0 && offset == 0 {
+		return session{}, readOffset, errNoMessages
 	}
 	if s.CWD == "" {
 		s.CWD = filepath.Dir(path)
@@ -263,5 +278,5 @@ func parseFile(path, h string) (session, error) {
 	if s.NativeID == "" {
 		s.NativeID = strings.TrimSuffix(filepath.Base(path), ".jsonl")
 	}
-	return s, nil
+	return s, readOffset, nil
 }

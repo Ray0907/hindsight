@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	_ "github.com/Ray0907/hindsight/internal/cjk"
@@ -44,17 +46,33 @@ func openDB() (*sql.DB, error) {
 	if e != nil {
 		return nil, e
 	}
-	db.SetMaxOpenConns(1)
+	db.SetMaxOpenConns(3)
 	_, e = db.Exec(`PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL;
 CREATE TABLE IF NOT EXISTS meta (schema_version INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS sessions (uid TEXT PRIMARY KEY, harness TEXT, native_id TEXT, path TEXT, cwd TEXT, project TEXT, model TEXT, started TEXT, updated TEXT);
 CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, session_uid TEXT, idx INTEGER, ts TEXT, role TEXT, text TEXT);
 CREATE INDEX IF NOT EXISTS messages_session ON messages(session_uid,idx);
 CREATE TABLE IF NOT EXISTS sources (path TEXT PRIMARY KEY, mtime INTEGER, size INTEGER);
+CREATE TABLE IF NOT EXISTS dirs (path TEXT PRIMARY KEY, mtime INTEGER);
 CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(text, content='messages',content_rowid='id',tokenize='cjk unigram 1 remove_diacritics 2');
 CREATE TRIGGER IF NOT EXISTS messages_ai AFTER INSERT ON messages BEGIN INSERT INTO messages_fts(rowid,text) VALUES(new.id,new.text); END;
 CREATE TRIGGER IF NOT EXISTS messages_ad AFTER DELETE ON messages BEGIN INSERT INTO messages_fts(messages_fts,rowid,text) VALUES('delete',old.id,old.text); END;
 INSERT INTO meta(schema_version) SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM meta);`)
+	if e == nil {
+		e = ensureColumn(db, "sessions", "msg_count", "INTEGER")
+	}
+	if e == nil {
+		e = ensureColumn(db, "sources", "offset", "INTEGER DEFAULT 0")
+	}
+	if e == nil {
+		e = ensureColumn(db, "sources", "inode", "INTEGER DEFAULT 0")
+	}
+	if e == nil {
+		_, e = db.Exec(`UPDATE sessions SET msg_count=(SELECT count(*) FROM messages WHERE session_uid=sessions.uid) WHERE msg_count IS NULL`)
+	}
+	if e == nil {
+		_, e = db.Exec(`UPDATE meta SET schema_version=2 WHERE schema_version<2`)
+	}
 	if e == nil {
 		e = os.Chmod(path, 0600)
 	}
@@ -65,37 +83,220 @@ INSERT INTO meta(schema_version) SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM meta);`
 	return db, nil
 }
 
+func ensureColumn(db *sql.DB, table, col, definition string) error {
+	rows, e := db.Query("PRAGMA table_info(" + table + ")")
+	if e != nil {
+		return e
+	}
+	found := false
+	for rows.Next() {
+		var id, notnull, pk int
+		var name, typ string
+		var def sql.NullString
+		if e = rows.Scan(&id, &name, &typ, &notnull, &def, &pk); e != nil {
+			break
+		}
+		if name == col {
+			found = true
+		}
+	}
+	rows.Close()
+	if e != nil {
+		return e
+	}
+	if found {
+		return nil
+	}
+	_, e = db.Exec("ALTER TABLE " + table + " ADD COLUMN " + col + " " + definition)
+	return e
+}
+
+type fileStat struct {
+	path string
+	info os.FileInfo
+	err  error
+}
+
+func statPaths(paths []string) (map[string]os.FileInfo, int) {
+	jobs := make(chan string)
+	results := make(chan fileStat, len(paths))
+	for i := 0; i < 24; i++ {
+		go func() {
+			for p := range jobs {
+				info, err := os.Stat(p)
+				results <- fileStat{p, info, err}
+			}
+		}()
+	}
+	go func() {
+		for _, p := range paths {
+			jobs <- p
+		}
+		close(jobs)
+	}()
+	infos := make(map[string]os.FileInfo, len(paths))
+	failed := 0
+	for range paths {
+		r := <-results
+		if r.err != nil {
+			failed++
+		} else {
+			infos[r.path] = r.info
+		}
+	}
+	return infos, failed
+}
+func discover(db *sql.DB, rebuild bool) (map[string]string, map[string]int64, bool, int, error) {
+	roots := roots()
+	known := map[string]int64{}
+	if !rebuild {
+		rows, e := db.Query("SELECT path,mtime FROM dirs")
+		if e != nil {
+			return nil, nil, false, 0, e
+		}
+		for rows.Next() {
+			var p string
+			var m int64
+			if rows.Scan(&p, &m) == nil {
+				known[p] = m
+			}
+		}
+		rows.Close()
+	}
+	stable := len(known) > 0
+	for _, root := range roots {
+		if _, ok := known[root]; !ok {
+			stable = false
+		}
+	}
+	if stable {
+		paths := make([]string, 0, len(known))
+		for p := range known {
+			paths = append(paths, p)
+		}
+		infos, _ := statPaths(paths)
+		for p, mtime := range known {
+			now := int64(-1)
+			if info := infos[p]; info != nil {
+				now = info.ModTime().UnixNano()
+			}
+			if now != mtime {
+				stable = false
+				break
+			}
+		}
+	}
+	files := map[string]string{}
+	dirs := map[string]int64{}
+	skipped := 0
+	if stable {
+		rows, e := db.Query("SELECT path FROM sources")
+		if e != nil {
+			return nil, nil, false, 0, e
+		}
+		for rows.Next() {
+			var p string
+			if rows.Scan(&p) == nil {
+				for h, root := range roots {
+					if strings.HasPrefix(p, root+string(os.PathSeparator)) {
+						files[p] = h
+						break
+					}
+				}
+			}
+		}
+		e = rows.Err()
+		rows.Close()
+		return files, dirs, false, 0, e
+	}
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	for h, root := range roots {
+		wg.Add(1)
+		go func(h, root string) {
+			defer wg.Done()
+			local := map[string]string{}
+			localDirs := map[string]int64{}
+			bad := 0
+			err := filepath.WalkDir(root, func(p string, d os.DirEntry, e error) error {
+				if e != nil {
+					if !errors.Is(e, os.ErrNotExist) {
+						bad++
+					}
+					return nil
+				}
+				if d.IsDir() {
+					if info, e := d.Info(); e == nil {
+						localDirs[p] = info.ModTime().UnixNano()
+					}
+					return nil
+				}
+				if strings.HasSuffix(p, ".jsonl") {
+					local[p] = h
+				}
+				return nil
+			})
+			if err != nil && !errors.Is(err, os.ErrNotExist) {
+				bad++
+			}
+			if _, ok := localDirs[root]; !ok {
+				localDirs[root] = -1
+			}
+			mu.Lock()
+			for p, h := range local {
+				files[p] = h
+			}
+			for p, m := range localDirs {
+				dirs[p] = m
+			}
+			skipped += bad
+			mu.Unlock()
+		}(h, root)
+	}
+	wg.Wait()
+	return files, dirs, true, skipped, nil
+}
+
 type syncStats struct {
 	Files, Changed, Skipped int
 	Messages                map[string]int
 }
 
 func syncIndex(db *sql.DB, rebuild bool, progress func(int, int)) (syncStats, error) {
+	started := time.Now()
 	stats := syncStats{Messages: map[string]int{}}
-	files := map[string]string{}
-	for h, root := range roots() {
-		err := filepath.WalkDir(root, func(p string, d os.DirEntry, e error) error {
-			if e != nil {
-				if !errors.Is(e, os.ErrNotExist) {
-					stats.Skipped++
-				}
-				return nil
-			}
-			if !d.IsDir() && strings.HasSuffix(p, ".jsonl") {
-				files[p] = h
-			}
-			return nil
-		})
-		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			stats.Skipped++
-		}
+	files, dirs, walked, skipped, e := discover(db, rebuild)
+	if e != nil {
+		return stats, e
 	}
+	stats.Skipped = skipped
 	stats.Files = len(files)
+	timing("sync_walk", started)
+	started = time.Now()
+	paths := make([]string, 0, len(files))
+	for p := range files {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+	infos, failed := statPaths(paths)
+	stats.Skipped += failed
+	timing("sync_stat", started)
+	started = time.Now()
 	tx, e := db.Begin()
 	if e != nil {
 		return stats, e
 	}
 	defer tx.Rollback()
+	if walked {
+		if _, e = tx.Exec("DELETE FROM dirs"); e != nil {
+			return stats, e
+		}
+		for p, m := range dirs {
+			if _, e = tx.Exec("INSERT INTO dirs(path,mtime) VALUES(?,?)", p, m); e != nil {
+				return stats, e
+			}
+		}
+	}
 	if rebuild {
 		for _, table := range []string{"messages", "sessions", "sources"} {
 			if _, e = tx.Exec("DELETE FROM " + table); e != nil {
@@ -103,19 +304,22 @@ func syncIndex(db *sql.DB, rebuild bool, progress func(int, int)) (syncStats, er
 			}
 		}
 	}
-	old := map[string]struct{ mtime, size int64 }{}
-	rows, e := tx.Query("SELECT path,mtime,size FROM sources")
+	type sourceState struct{ mtime, size, offset, inode int64 }
+	old := map[string]sourceState{}
+	rows, e := tx.Query("SELECT path,mtime,size,offset,inode FROM sources")
 	if e != nil {
 		return stats, e
 	}
 	for rows.Next() {
 		var p string
-		var v struct{ mtime, size int64 }
-		if rows.Scan(&p, &v.mtime, &v.size) == nil {
+		var v sourceState
+		if rows.Scan(&p, &v.mtime, &v.size, &v.offset, &v.inode) == nil {
 			old[p] = v
 		}
 	}
 	rows.Close()
+	timing("sync_sources", started)
+	started = time.Now()
 	for p := range old {
 		if _, ok := files[p]; !ok {
 			if e = removeSource(tx, p); e != nil {
@@ -123,50 +327,71 @@ func syncIndex(db *sql.DB, rebuild bool, progress func(int, int)) (syncStats, er
 			}
 		}
 	}
-	paths := make([]string, 0, len(files))
-	for p := range files {
-		paths = append(paths, p)
-	}
-	sort.Strings(paths)
 	for i, p := range paths {
 		if progress != nil {
 			progress(i+1, len(paths))
 		}
-		info, err := os.Stat(p)
+		info := infos[p]
+		if info == nil {
+			continue
+		}
+		mtime, size := info.ModTime().UnixNano(), info.Size()
+		inode := int64(info.Sys().(*syscall.Stat_t).Ino)
+		v, ok := old[p]
+		if ok && v.mtime == mtime && v.size == size {
+			continue
+		}
+		appendOnly := ok && v.inode == inode && v.offset > 0 && size > v.size && v.offset <= v.size
+		var base session
+		startIdx := 0
+		offset := int64(0)
+		if appendOnly {
+			offset = v.offset
+			e = tx.QueryRow("SELECT uid,harness,native_id,path,cwd,project,model,started,updated,msg_count FROM sessions WHERE path=?", p).Scan(&base.UID, &base.Harness, &base.NativeID, &base.Path, &base.CWD, &base.Project, &base.Model, &base.Started, &base.Updated, &startIdx)
+			if e != nil {
+				appendOnly = false
+				offset = 0
+				startIdx = 0
+			}
+		}
+		s, nextOffset, err := parseFile(p, files[p], offset, size, base, startIdx)
 		if err != nil {
 			stats.Skipped++
+			if errors.Is(err, errNoMessages) {
+				if _, e = tx.Exec("INSERT INTO sources(path,mtime,size,offset,inode) VALUES(?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET mtime=excluded.mtime,size=excluded.size,offset=excluded.offset,inode=excluded.inode", p, mtime, size, nextOffset, inode); e != nil {
+					return stats, e
+				}
+			}
 			continue
 		}
-		mtime := info.ModTime().UnixNano()
-		size := info.Size()
-		if v, ok := old[p]; ok && v.mtime == mtime && v.size == size {
-			continue
-		}
-		s, err := parseFile(p, files[p])
-		if err != nil {
-			stats.Skipped++
-			continue
-		}
-		if e = removeSource(tx, p); e != nil {
-			return stats, e
-		}
-		if _, e = tx.Exec("INSERT INTO sessions VALUES(?,?,?,?,?,?,?,?,?)", s.UID, s.Harness, s.NativeID, s.Path, s.CWD, s.Project, s.Model, s.Started, s.Updated); e != nil {
-			return stats, e
+		if !appendOnly {
+			if e = removeSource(tx, p); e != nil {
+				return stats, e
+			}
+			if _, e = tx.Exec("INSERT INTO sessions(uid,harness,native_id,path,cwd,project,model,started,updated,msg_count) VALUES(?,?,?,?,?,?,?,?,?,?)", s.UID, s.Harness, s.NativeID, s.Path, s.CWD, s.Project, s.Model, s.Started, s.Updated, len(s.Messages)); e != nil {
+				return stats, e
+			}
+		} else {
+			if _, e = tx.Exec("UPDATE sessions SET cwd=?,project=?,model=?,updated=?,msg_count=msg_count+? WHERE uid=?", s.CWD, s.Project, s.Model, s.Updated, len(s.Messages), s.UID); e != nil {
+				return stats, e
+			}
 		}
 		for _, m := range s.Messages {
 			if _, e = tx.Exec("INSERT INTO messages(session_uid,idx,ts,role,text) VALUES(?,?,?,?,?)", s.UID, m.Index, m.TS, m.Role, m.Text); e != nil {
 				return stats, e
 			}
 		}
-		if _, e = tx.Exec("INSERT INTO sources VALUES(?,?,?)", p, mtime, size); e != nil {
+		if _, e = tx.Exec("INSERT INTO sources(path,mtime,size,offset,inode) VALUES(?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET mtime=excluded.mtime,size=excluded.size,offset=excluded.offset,inode=excluded.inode", p, mtime, size, nextOffset, inode); e != nil {
 			return stats, e
 		}
 		stats.Changed++
 	}
+	timing("sync_changes", started)
+	started = time.Now()
 	if e = tx.Commit(); e != nil {
 		return stats, e
 	}
-	rows, e = db.Query("SELECT s.harness,count(m.id) FROM sessions s LEFT JOIN messages m ON s.uid=m.session_uid GROUP BY s.harness")
+	rows, e = db.Query("SELECT harness,sum(msg_count) FROM sessions GROUP BY harness")
 	if e != nil {
 		return stats, e
 	}
@@ -178,6 +403,7 @@ func syncIndex(db *sql.DB, rebuild bool, progress func(int, int)) (syncStats, er
 			stats.Messages[h] = n
 		}
 	}
+	timing("sync_counts", started)
 	return stats, rows.Err()
 }
 func removeSource(tx *sql.Tx, p string) error {

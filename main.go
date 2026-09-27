@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -8,6 +9,7 @@ import (
 	"os/exec"
 	"strings"
 	"syscall"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/mattn/go-isatty"
@@ -23,7 +25,13 @@ func main() {
 		os.Exit(1)
 	}
 }
+func timing(label string, started time.Time) {
+	if os.Getenv("HINDSIGHT_DEBUG_TIMING") == "1" {
+		fmt.Fprintf(os.Stderr, "timing %s=%.2fms\n", label, float64(time.Since(started).Microseconds())/1000)
+	}
+}
 func run() error {
+	started := time.Now()
 	args := os.Args[1:]
 	index := len(args) > 0 && args[0] == "index"
 	if index {
@@ -70,8 +78,11 @@ func run() error {
 		return e
 	}
 	defer db.Close()
+	timing("startup", started)
 	if index {
+		syncStart := time.Now()
 		s, e := syncIndex(db, *rebuild, nil)
+		timing("sync", syncStart)
 		if e != nil {
 			return e
 		}
@@ -83,16 +94,22 @@ func run() error {
 	}
 	q := strings.Join(words, " ")
 	if *jsonFlag || !isatty.IsTerminal(os.Stdout.Fd()) {
-		if _, e = syncIndex(db, false, nil); e != nil {
-			return e
-		}
-		rows, e := search(db, q, *harness)
+		syncStart := time.Now()
+		_, e = syncIndex(db, false, nil)
+		timing("sync", syncStart)
 		if e != nil {
 			return e
 		}
-		return jsonLines(rows)
+		rows, e := search(context.Background(), db, q, *harness)
+		if e != nil {
+			return e
+		}
+		renderStart := time.Now()
+		e = jsonLines(rows)
+		timing("render", renderStart)
+		return e
 	}
-	rows, e := search(db, q, *harness)
+	rows, e := search(context.Background(), db, q, *harness)
 	if e != nil {
 		return e
 	}
