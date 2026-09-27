@@ -30,7 +30,7 @@ Use a fresh synthetic `HOME` from `./test/fixture.sh` for every run. Run all com
 - [ ] Empty query and query containing only negations do not issue invalid FTS MATCH; they show the latest message of each recent session.
 - [ ] All SPEC Expected behavior cases pass: `snapshot` = `SNAPSHOT`; `resum` matches `resuming`; `sume` does not; `"tea black"` does not match `black tea`; `naive` matches `naïve`; `json_extract`, `low-water`, `S3`, and `cjk.c` match; `魚池` matches inside `日月潭紅茶產於南投縣魚池鄉`; `南投魚池` does not; single-character `茶` matches `紅茶`.
 - [ ] Chinese, Japanese, Korean, and English searches work over transcript message text, not only title/excerpt; CJK two-cell characters do not break snippet boundaries or highlight positions.
-- [ ] Results are one row per matching message, ordered by BM25 then newest-first for ties, capped at 300, and do not repeat a session row in place of message-level hits.
+- [ ] Results are one row per matching message, ordered by conversation (user/assistant) hits before tool hits, then relevance/newness; common terms span files and the newest match is retained, capped at 300. Tool-only matches remain searchable.
 - [ ] `--harness claude|codex|pi` and Tab/Shift-Tab filter consistently, including empty results and recent-session mode.
 - [ ] Snippets include surrounding context, start roughly 12 cells before the first hit, do not cut Latin words, use `…` when clipped, and mark only actual hit text in red+underline.
 

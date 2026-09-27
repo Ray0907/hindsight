@@ -1,19 +1,19 @@
 hindsight ▸ snapshot                                                         6 messages · 3 sessions
 highlights none · press h in results to add
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-▌ Find the snapshot and resume path; resuming should preserve JSON…      claude  demo             5h
-▌ Search for snapshot, resum, json_extract, low-water, S3, and cjk.c.    codex   demo             5h
-▌ Find SNAPSHOT and resuming; test S3, json_extract, low-water, and cjk… pi      demo             5h
-▌ SNAPSHOT: json_extract handles low-water marks, S3 uploads, cjk.c,…    claude  demo             5h
-▌ A snapshot can resume safely; the phrase is black tea, and naïve…      pi      demo             5h
-▌ SNAPSHOT is ready; resuming is safe, but a shorter prefix is not a…    codex   demo             5h
+›▌ Find the snapshot and resume path; resuming should preserve JSON…     claude  demo             6h
+ ▌ Search for snapshot, resum, json_extract, low-water, S3, and cjk.c.   codex   demo             6h
+ ▌ Find SNAPSHOT and resuming; test S3, json_extract, low-water, and…    pi      demo             6h
+ ▌ SNAPSHOT: json_extract handles low-water marks, S3 uploads, cjk.c,…   claude  demo             6h
+ ▌ A snapshot can resume safely; the phrase is black tea, and naïve…     pi      demo             6h
+ ▌ SNAPSHOT is ready; resuming is safe, but a shorter prefix is not a…   codex   demo             6h
 
 
 
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-     demo  <fixture>/home/work/demo…
-✱  10:00 you   Find the snapshot and resume path; resuming should preserve JSON output.
+▌ demo  <fixture>/home/work/… hit 1 of 6
+›  10:00 you   Find the snapshot and resume path; resuming should preserve JSON output.
 ✱  10:00 asst  SNAPSHOT: json_extract handles low-water marks, S3 uploads, cjk.c, and naïve input.
      ⋯
 
@@ -28,5 +28,5 @@ highlights none · press h in results to add
 
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-23:16 opened <fixture>/home/work/demo…
+00:25 opened <fixture>/home/work/demo…
 ↑↓ move  n/N next hit  h highlight  H clear  v full  o open in <fixture>

@@ -1,9 +1,9 @@
 hindsight ▸ cutprobe▌                                                                            3 messages · 3 sessions
 highlights none · press h in results to add
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-▌ cutprobe alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu…            pi      demo             4h
-▌ cutprobe alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu…            codex   demo             4h
-▌ cutprobe alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu…            claude  demo             4h
+›▌ cutprobe alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu…           pi      demo             5h
+ ▌ cutprobe alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu…           codex   demo             5h
+ ▌ cutprobe alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu…           claude  demo             5h
 
 
 
@@ -15,9 +15,9 @@ highlights none · press h in results to add
 
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-     demo  <fixture>/home/work/demo  2026-09-27  pi
-✱  10:30 you   cutprobe alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu supercalifragilisticexpial
-               idocious tail
+▌ demo  <fixture>/home/work/demo  2026-09-27  pi  hit 1 of 3
+›  10:30 you   cutprobe alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu
+               supercalifragilisticexpialidocious tail
 
 
 

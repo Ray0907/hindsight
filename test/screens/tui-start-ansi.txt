@@ -1,12 +1,12 @@
 [38;2;29;62;102mhindsight[39m [38;2;96;105;116m▸[39m snapshot▌                                                                            [38;2;96;105;116m6 messages · 3 sessions
 highlights none · press h in results to add[39m
 [38;2;121;136;152m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-[2m[38;2;141;93;28m[48;2;234;241;250m▌[0m Find the [1;4m[38;2;182;50;44msnapshot[0m and resume path; resuming should preserve JSON output.                   [38;2;141;93;28mclaude[39m  [38;2;96;105;116mdemo[39m        [38;2;96;105;116m     5h
-[2m[38;2;20;113;117m▌[0m Search for [1;4m[38;2;182;50;44msnapshot[0m, resum, json_extract, low-water, S3, and cjk.c.                        [38;2;20;113;117mcodex[39m   [38;2;96;105;116mdemo[39m        [38;2;96;105;116m     5h
-[2m[38;2;59;113;62m▌[0m Find [1;4m[38;2;182;50;44mSNAPSHOT[0m and resuming; test S3, json_extract, low-water, and cjk.c.                   [38;2;59;113;62mpi[39m      [38;2;96;105;116mdemo[39m        [38;2;96;105;116m     5h
-[2m[38;2;141;93;28m▌[0m [1;4m[38;2;182;50;44mSNAPSHOT[0m: json_extract handles low-water marks, S3 uploads, cjk.c, and naïve input.        [38;2;141;93;28mclaude[39m  [38;2;96;105;116mdemo[39m        [38;2;96;105;116m     5h
-[2m[38;2;59;113;62m▌[0m A [1;4m[38;2;182;50;44msnapshot[0m can resume safely; the phrase is black tea, and naïve input is searchable.      [38;2;59;113;62mpi[39m      [38;2;96;105;116mdemo[39m        [38;2;96;105;116m     5h
-[2m[38;2;20;113;117m▌[0m [1;4m[38;2;182;50;44mSNAPSHOT[0m is ready; resuming is safe, but a shorter prefix is not a match. The phrase is…   [38;2;20;113;117mcodex[39m   [38;2;96;105;116mdemo[39m        [38;2;96;105;116m     5h
+[38;2;29;62;102m[48;2;210;227;249m›[38;2;141;93;28m▌[39m [1mFind the [4m[38;2;182;50;44msnapshot[0;1m[48;2;210;227;249m and resume path; resuming should preserve JSON output.[0m[48;2;210;227;249m                  [1mclaude[0m[48;2;210;227;249m  [1mdemo[0m[48;2;210;227;249m        [1m     6h
+[0;2m [38;2;20;113;117m▌[0m Search for [1;4m[38;2;182;50;44msnapshot[0m, resum, json_extract, low-water, S3, and cjk.c.                       [38;2;20;113;117mcodex[39m   [38;2;96;105;116mdemo[39m        [38;2;96;105;116m     6h
+[2m[39m [38;2;59;113;62m▌[0m Find [1;4m[38;2;182;50;44mSNAPSHOT[0m and resuming; test S3, json_extract, low-water, and cjk.c.                  [38;2;59;113;62mpi[39m      [38;2;96;105;116mdemo[39m        [38;2;96;105;116m     6h
+[2m[39m [38;2;141;93;28m▌[0m [1;4m[38;2;182;50;44mSNAPSHOT[0m: json_extract handles low-water marks, S3 uploads, cjk.c, and naïve input.       [38;2;141;93;28mclaude[39m  [38;2;96;105;116mdemo[39m        [38;2;96;105;116m     6h
+[2m[39m [38;2;59;113;62m▌[0m A [1;4m[38;2;182;50;44msnapshot[0m can resume safely; the phrase is black tea, and naïve input is searchable.     [38;2;59;113;62mpi[39m      [38;2;96;105;116mdemo[39m        [38;2;96;105;116m     6h
+[2m[39m [38;2;20;113;117m▌[0m [1;4m[38;2;182;50;44mSNAPSHOT[0m is ready; resuming is safe, but a shorter prefix is not a match. The phrase is…  [38;2;20;113;117mcodex[39m   [38;2;96;105;116mdemo[39m        [38;2;96;105;116m     6h
 [39m
 
 
@@ -15,9 +15,9 @@ highlights none · press h in results to add[39m
 
 
 [38;2;121;136;152m────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-[2m[39m     [38;2;29;62;102mdemo[0m  [38;2;96;105;116m<fixture>/home/work/demo  2026-09-27[39m  [38;2;141;93;28mclaude[39m
-[2m[38;2;182;50;44m[48;2;234;241;250m✱ [0m [38;2;96;105;116m10:00[39m [38;2;29;62;102myou  [39m Find the [1;4m[38;2;182;50;44msnapshot[0m and resume path; resuming should preserve JSON output.
-[2m[38;2;182;50;44m✱ [0m [38;2;96;105;116m10:00[39m [38;2;96;105;116masst [39m [1;4m[38;2;182;50;44mSNAPSHOT[0m: json_extract handles low-water marks, S3 uploads, cjk.c, and naïve input.
+[38;2;141;93;28m▌[39m [38;2;29;62;102mdemo[39m  [38;2;96;105;116m<fixture>/home/work/demo  2026-09-27[39m…     [38;2;96;105;116mhit 1 of 6
+[38;2;29;62;102m[48;2;210;227;249m› [39m [1m10:00[0m[48;2;210;227;249m [1myou  [0m[48;2;210;227;249m [1mFind the [4m[38;2;182;50;44msnapshot[0;1m[48;2;210;227;249m and resume path; resuming should preserve JSON output.[0m[48;2;210;227;249m
+[2m[38;2;182;50;44m[49m✱ [0m [38;2;96;105;116m10:00[39m [38;2;96;105;116masst [39m [1;4m[38;2;182;50;44mSNAPSHOT[0m: json_extract handles low-water marks, S3 uploads, cjk.c, and naïve input.
 [2m[38;2;96;105;116m     ⋯[0m
 
 

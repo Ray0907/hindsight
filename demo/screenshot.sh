@@ -29,5 +29,5 @@ shot() { # name query [keys...]
   echo "assets/$name.png"
 }
 
-shot hindsight checkout Escape
+shot hindsight checkout Escape Down Down
 shot hindsight-cjk 結帳 Escape h P a y Enter

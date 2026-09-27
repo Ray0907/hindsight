@@ -8,7 +8,7 @@ PASS=0; FAIL=0
 record(){ local name=$1 res=$2 sec=$3 detail=${4:-} expected='check passes per test/FAILURE_MODES.md' repro='test/e2e.sh'; detail=${detail//|/\\|}; detail=${detail//$'\n'/ }; printf '| %s | %s | %ss | %s |\n' "$name" "$res" "$sec" "$detail" >> "$REPORT"; if [[ $res == PASS ]]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); if [[ $name == Performance:* ]]; then expected='p95 over 20 varied query latencies is <= 200ms'; repro='test/e2e.sh (200k-message fixture)'; fi; if [[ $name == Hit-list* ]]; then expected='each clipped hit snippet ends with ellipsis and no Latin word is cut'; fi; if [[ $name == Search\ semantics:* ]]; then expected='common-word results include the newest Claude message and results outside the last-indexed Pi file'; fi; failbug "$name" "$repro" "$expected" "$detail"; fi; }
 skip(){ printf '| %s | SKIP | 0s | %s |\n' "$1" "$2" >> "$REPORT"; }
 TMP=$(mktemp -d "${TMPDIR:-/tmp}/hindsight-e2e.XXXXXX")
-cleanup(){ tmux kill-session -t "htrunc-$$" 2>/dev/null || :; tmux kill-session -t "he2e-$$" 2>/dev/null || :; tmux kill-session -t "hrsm-$$" 2>/dev/null || :; tmux kill-session -t "hrsm-codex-$$" 2>/dev/null || :; tmux kill-session -t "hrsm-pi-$$" 2>/dev/null || :; tmux kill-session -t "hedt-$$" 2>/dev/null || :; rm -rf "$TMP"; }
+cleanup(){ tmux kill-session -t "htool-$$" 2>/dev/null || :; tmux kill-session -t "htrunc-$$" 2>/dev/null || :; tmux kill-session -t "he2e-$$" 2>/dev/null || :; tmux kill-session -t "hrsm-$$" 2>/dev/null || :; tmux kill-session -t "hrsm-codex-$$" 2>/dev/null || :; tmux kill-session -t "hrsm-pi-$$" 2>/dev/null || :; tmux kill-session -t "hedt-$$" 2>/dev/null || :; rm -rf "$TMP"; }
 trap cleanup EXIT
 failbug(){ printf '\n- **%s**\n  - Repro: `%s`\n  - Expected: %s\n  - Actual: %s\n' "$1" "$2" "$3" "$4" >> "$TEST/BUGS.md"; }
 
@@ -44,6 +44,30 @@ p=pathlib.Path(sys.argv[1]); p.write_text(p.read_text().replace('syncmarker','sy
 PY
 start=$SECONDS; out=$("$BIN" index 2>&1); rc=$?; changed=$("$BIN" --json syncchange 2>&1); if ((rc==0)) && grep -q '4 files, 1 changed' <<<"$out" && grep -q syncchange <<<"$changed" && [[ $(grep -c '"session_id":"44444444' <<<"$changed") == 1 ]]; then record 'Changed source is replaced, not duplicated' PASS $((SECONDS-start)) "$out"; else record 'Changed source is replaced, not duplicated' FAIL $((SECONDS-start)) "$out $changed"; fi
 rm "$clone"; start=$SECONDS; out=$("$BIN" index 2>&1); rc=$?; removed=$("$BIN" --json syncchange 2>&1); if ((rc==0)) && grep -q 'claude: 5 messages' <<<"$out" && [[ -z $removed ]]; then record 'Deleted source is removed from index' PASS $((SECONDS-start)) "$out"; else record 'Deleted source is removed from index' FAIL $((SECONDS-start)) "$out $removed"; fi
+# One transcript deliberately puts matching user/asst messages before a short tool row.
+python3 - "$H" <<'PY'
+import json,pathlib,sys
+h=pathlib.Path(sys.argv[1]); p=h/'.claude/projects/-work-demo/55555555-5555-4555-8555-555555555555.jsonl'
+sid='55555555-5555-4555-8555-555555555555'; filler=' '.join(['conversation']*70)
+rows=[
+ {'type':'user','uuid':'55555555-5555-4555-8555-555555555551','timestamp':'2026-09-27T11:00:00Z','cwd':str(h/'work/demo'),'sessionId':sid,'message':{'role':'user','content':'rankprobe '+filler}},
+ {'type':'assistant','uuid':'55555555-5555-4555-8555-555555555552','timestamp':'2026-09-27T11:00:03Z','cwd':str(h/'work/demo'),'sessionId':sid,'message':{'role':'assistant','content':[{'type':'text','text':'rankprobe '+filler},{'type':'tool_use','id':'tool-rank-1','name':'Bash','input':{'command':'rankprobe'}}]}},
+ {'type':'user','uuid':'55555555-5555-4555-8555-555555555553','timestamp':'2026-09-27T11:00:04Z','cwd':str(h/'work/demo'),'sessionId':sid,'message':{'role':'user','content':[{'type':'tool_result','tool_use_id':'tool-rank-1','content':'toolprobeonly output from helper'}]}}
+]
+p.write_text('\n'.join(json.dumps(x) for x in rows)+'\n')
+PY
+start=$SECONDS; out=$("$BIN" index 2>&1); rc=$?; if ((rc==0)) && grep -q '4 files, 1 changed' <<<"$out"; then record 'Tool-order fixture indexed' PASS $((SECONDS-start)) "$out"; else record 'Tool-order fixture indexed' FAIL $((SECONDS-start)) "$out"; fi
+ranked=$("$BIN" --json rankprobe 2>&1); printf '%s\n' "$ranked" > "$SCREENS/tool-order.jsonl"
+if python3 - "$SCREENS/tool-order.jsonl" <<'PY' > "$TMP/tool-order.txt" 2> "$TMP/tool-order.err"
+import json,sys
+rows=[json.loads(x) for x in open(sys.argv[1]) if x.strip()]; roles=[r['role'] for r in rows]
+conversation=[i for i,r in enumerate(roles) if r in ('user','asst')]; tools=[i for i,r in enumerate(roles) if r=='tool']
+assert conversation and tools, f'expected user/asst and tool hits, got {roles}'
+assert max(conversation)<min(tools), f'tool row ranked before conversation hits: {roles}'
+print(f'roles={roles}')
+PY
+then record 'Conversation hits precede matching tool row in JSON order' PASS 0 "$(<"$TMP/tool-order.txt")"; else record 'Conversation hits precede matching tool row in JSON order' FAIL 0 "$(<"$TMP/tool-order.err")"; fi
+tool_only=$("$BIN" --json toolprobeonly 2>&1); if grep -q '"role":"tool"' <<<"$tool_only" && grep -q toolprobeonly <<<"$tool_only"; then record 'Tool-only match remains searchable' PASS 0 ''; else record 'Tool-only match remains searchable' FAIL 0 "$tool_only"; fi
 
 # Query correctness cases from SPEC's Expected behavior plus languages/filters.
 check_query(){ local q=$1 mode=$2 want=${3:-}; local t=$SECONDS out rc; out=$("$BIN" --json "$q" 2>&1); rc=$?; local ok=1
@@ -133,6 +157,13 @@ tmux capture-pane -t "hedt-$$" -p > "$SCREENS/tui-editor.txt" 2>&1
 if tmux has-session -t "hedt-$$" 2>/dev/null; then record 'Editor launch leaves TUI alive' PASS 0 ''; else record 'Editor launch leaves TUI alive' FAIL 0 'TUI exited'; fi
 
 tmux kill-session -t "hedt-$$" 2>/dev/null || :
+# n/N must still navigate to matching tool-output messages in the transcript.
+export HINDSIGHT_INDEX="$H/index/tool-nav.db"
+tmux new-session -d -x 120 -y 40 -s "htool-$$" "cd '$ROOT' && HOME='$HOME' HINDSIGHT_INDEX='$HINDSIGHT_INDEX' HINDSIGHT_THEME=light TERM=xterm-256color exec ./hindsight toolprobeonly" 2>/dev/null
+sleep 1; tmux send-keys -t "htool-$$" Escape; sleep .2; tmux send-keys -t "htool-$$" n; sleep .2; tmux capture-pane -t "htool-$$" -p > "$SCREENS/tui-tool-nav-next.txt"
+tmux send-keys -t "htool-$$" N; sleep .2; tmux capture-pane -t "htool-$$" -p > "$SCREENS/tui-tool-nav-prev.txt"
+if grep -Eq '[✱›].*tool.*toolprobeonly' "$SCREENS/tui-tool-nav-next.txt" && grep -Eq '[✱›].*tool.*toolprobeonly' "$SCREENS/tui-tool-nav-prev.txt"; then record 'TUI n/N visits matching tool hit' PASS 0 'both directions retain the tool hit in transcript'; else record 'TUI n/N visits matching tool hit' FAIL 0 "n=$(grep -E 'toolprobeonly' "$SCREENS/tui-tool-nav-next.txt") N=$(grep -E 'toolprobeonly' "$SCREENS/tui-tool-nav-prev.txt")"; fi
+tmux kill-session -t "htool-$$" 2>/dev/null || :
 # Truncation test has a hit crossing a Latin word at the snippet's right boundary.
 export HINDSIGHT_INDEX="$H/index/trunc.db"
 tmux new-session -d -x 120 -y 40 -s "htrunc-$$" "cd '$ROOT' && HOME='$HOME' HINDSIGHT_INDEX='$HINDSIGHT_INDEX' HINDSIGHT_THEME=light TERM=xterm-256color exec ./hindsight cutprobe" 2>/dev/null

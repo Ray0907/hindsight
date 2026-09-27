@@ -1,0 +1,40 @@
+hindsight ▸ toolprobeonly                                                                        1 messages · 1 sessions
+highlights none · press h in results to add
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+›▌ Bash · toolprobeonly output from helper                                                   claude  demo             5h
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+▌ demo  <fixture>/home/work/demo  2026-09-27…     hit 1 of 1
+   11:00 you   rankprobe conversation conversation conversation conversation conversation conversation conversation
+               conversation conversation conversation conversation conversation conversation conversation conversation
+               conversation conversation conversation conversation conversation conversation conversation conversation
+               conversation conversation conversation conversation conversation conversation conversation conversation
+               conversation conversation conversation conversation conversation conversation conversation conversation
+               conversation conversation conversation conversation conversation conversation conversation conversation
+               conversation conversation conversation conversation conversation conversation conversation conversation
+               conversation conversation conversation conversation conversation conversation conversation conversation
+               conversation conversation conversation conversation conversation conversation conversation
+     ⋯
+›  11:00 tool  Bash · toolprobeonly output from helper
+     ⋯
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+↑↓ move  n/N next hit  h highlight  H clear  v full  o open in zed  y copy  enter resume  / search  ?
