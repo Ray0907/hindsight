@@ -7,11 +7,14 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/mattn/go-runewidth"
 	"github.com/muesli/termenv"
+	"github.com/rivo/uniseg"
 	"golang.org/x/text/unicode/norm"
 )
 
@@ -429,18 +432,40 @@ func clip(s string, n int) string {
 	if n <= 0 {
 		return ""
 	}
-	var b strings.Builder
-	w := 0
-	for _, r := range s {
-		rw := runewidth.RuneWidth(r)
-		if w+rw > n {
+	if uniseg.StringWidth(s) <= n {
+		return s
+	}
+	g := uniseg.NewGraphemes(s)
+	end, cells := 0, 0
+	for g.Next() {
+		if cells+g.Width() > n-1 {
 			break
 		}
-		b.WriteRune(r)
-		w += rw
+		_, end = g.Positions()
+		cells += g.Width()
 	}
-	return b.String()
+	prefix := s[:end]
+	if end < len(s) {
+		next, _ := utf8.DecodeRuneInString(s[end:])
+		lastPart := prefix
+		last, size := utf8.DecodeLastRuneInString(lastPart)
+		for unicode.Is(unicode.Mn, last) && size > 0 {
+			lastPart = lastPart[:len(lastPart)-size]
+			last, size = utf8.DecodeLastRuneInString(lastPart)
+		}
+		if latinWord(last) && latinWord(next) {
+			for len(prefix) > 0 {
+				r, size := utf8.DecodeLastRuneInString(prefix)
+				if !latinWord(r) && !unicode.Is(unicode.Mn, r) {
+					break
+				}
+				prefix = prefix[:len(prefix)-size]
+			}
+		}
+	}
+	return strings.TrimRightFunc(prefix, unicode.IsSpace) + "…"
 }
+func latinWord(r rune) bool { return unicode.Is(unicode.Latin, r) || unicode.IsDigit(r) || r == '_' }
 func (m model) paint(s string, query bool) string {
 	ts := terms(m.q)
 	r := []rune(s)
@@ -618,7 +643,17 @@ func (m model) View() string {
 	}
 	return b.String()
 }
-func clipANSI(s string, w int) string { return lipgloss.NewStyle().MaxWidth(w).Render(s) }
+func clipANSI(s string, w int) string {
+	if w <= 0 {
+		return ""
+	}
+	plain := ansi.Strip(s)
+	short := clip(plain, w)
+	if plain == short {
+		return s
+	}
+	return ansi.Truncate(s, ansi.StringWidth(strings.TrimSuffix(short, "…"))+1, "…") + "\x1b[0m"
+}
 func (m model) pageLines(w int) []string {
 	if m.help {
 		return []string{"  focus    Bright zone takes keys; search dims results", "  query    space = AND · quotes = phrase · -word = exclude", "  ↓ / esc search to results    / results to search", "  ↑ ↓     previous / next message", "  n / N   next / previous hit in transcript", "  h / H   add highlighter / clear highlights", "  v       full transcript (hide hit list)", "  o       open directory in editor", "  y       copy resume command", "  enter   exit and resume in original cwd", "  tab     all · claude · codex · pi", "  ctrl+c  quit"}

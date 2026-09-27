@@ -32,11 +32,7 @@ func first(s string) string {
 	if i := strings.IndexByte(s, '\n'); i >= 0 {
 		s = s[:i]
 	}
-	r := []rune(s)
-	if len(r) > 200 {
-		return string(r[:200])
-	}
-	return s
+	return clip(s, 200)
 }
 func textParts(v any, types ...string) []string {
 	var out []string
