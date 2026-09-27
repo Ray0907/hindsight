@@ -19,8 +19,6 @@
 
 macOS for now. Linux is planned.
 
-![hindsight searching "auth" across Claude, Codex and Pi sessions (synthetic data)](docs/demo.png)
-
 ## Install
 
 ### Download (macOS)
