@@ -1,10 +1,10 @@
 # E2E report
 
-Run: 2026-09-27 10:24:50 UTC
+Run: 2026-09-27 15:15:08 UTC
 
 | Check | Result | Time | Details |
 |---|---:|---:|---|
-| make build (sqlite_fts5) | PASS | 1s | built ./hindsight |
+| make build (sqlite_fts5) | PASS | 2s | built ./hindsight |
 | Index Claude/Codex/Pi real-format fixtures | PASS | 0s | claude: 5 messages codex: 5 messages pi: 5 messages 3 files, 3 changed, 0 skipped |
 | No-op incremental scan; transcript bytes unchanged | PASS | 0s | claude: 5 messages codex: 5 messages pi: 5 messages 3 files, 0 changed, 0 skipped |
 | Incremental sync adds new file | PASS | 0s | claude: 11 messages codex: 5 messages pi: 5 messages 4 files, 1 changed, 0 skipped |
@@ -46,10 +46,10 @@ Run: 2026-09-27 10:24:50 UTC
 | Editor stub launch + project directory | PASS | 0s | zed\|<repo>\|<fixture>/home/work/demo |
 | Editor launch leaves TUI alive | PASS | 0s |  |
 | Hit-list truncation: ellipsis + whole Latin words | PASS | 0s | 3 hit rows end their clipped snippet in ellipsis; Latin token intact or omitted |
-| Performance: 2k sessions / 200k messages (20 varied queries) | PASS | 0s | index=5037.0ms queries=20 median=22.07ms p95=28.61ms slowest=[{"query":"\"synthetic message\"","ms":28.9,"timing":"timing startup=0.86ms\ntiming sync_walk=0.79ms\ntiming sync_stat=2.46ms\ntiming sync_sources=1.15ms\ntiming sync_changes=0.11ms\ntiming sync_counts=0.28ms\ntiming sync=4.80ms\ntiming query=14.20ms\ntiming snippet=0.14ms\ntiming render=0.30ms"},{"query":"-perfneedle","ms":28.61,"timing":"timing startup=0.88ms\ntiming sync_walk=0.80ms\ntiming sync_stat=2.61ms\ntiming sync_sources=1.13ms\ntiming sync_changes=0.10ms\ntiming sync_counts=0.28ms\ntiming sync=4.93ms\ntiming query=13.68ms\ntiming snippet=0.13ms\ntiming render=0.31ms"},{"query":"\"neutral synthetic\"","ms":28.49,"timing":"timing startup=0.93ms\ntiming sync_walk=0.74ms\ntiming sync_stat=2.41ms\ntiming sync_sources=1.11ms\ntiming sync_changes=0.11ms\ntiming sync_counts=0.27ms\ntiming sync=4.65ms\ntiming query=14.30ms\ntiming snippet=0.12ms\ntiming render=0.26ms"}] |
+| Performance: 2k sessions / 200k messages (20 varied queries) | PASS | 0s | index=6211.85ms queries=20 median=21.98ms p95=28.91ms slowest=[{"query":"-perfneedle","ms":29.1,"timing":"timing startup=0.93ms\ntiming sync_walk=0.72ms\ntiming sync_stat=2.96ms\ntiming sync_sources=1.16ms\ntiming sync_changes=0.12ms\ntiming sync_counts=0.26ms\ntiming sync=5.24ms\ntiming query=13.87ms\ntiming snippet=0.12ms\ntiming render=0.28ms"},{"query":"\"neutral synthetic\"","ms":28.91,"timing":"timing startup=0.92ms\ntiming sync_walk=0.74ms\ntiming sync_stat=2.45ms\ntiming sync_sources=1.10ms\ntiming sync_changes=0.11ms\ntiming sync_counts=0.26ms\ntiming sync=4.67ms\ntiming query=14.42ms\ntiming snippet=0.13ms\ntiming render=0.29ms"},{"query":"\"synthetic message\"","ms":28.83,"timing":"timing startup=0.96ms\ntiming sync_walk=0.78ms\ntiming sync_stat=2.46ms\ntiming sync_sources=1.13ms\ntiming sync_changes=0.11ms\ntiming sync_counts=0.26ms\ntiming sync=4.75ms\ntiming query=13.93ms\ntiming snippet=0.13ms\ntiming render=0.27ms"}] |
 | Search semantics: common term is ranked by message time, not insertion order | PASS | 0s | 300 rows; harnesses=['claude', 'codex']; newest=2026-10-01T10:00:01Z |
-| Append sync: next CLI query finds new line; only tail parsed | PASS | 0s | sync_changes=0.30ms; claude: 2 messages codex: 200001 messages pi: 1 messages 2002 files, 0 changed, 0 skipped |
-| Partial final line is withheld until newline | PASS | 0s | timing startup=0.95ms timing sync_walk=0.80ms timing sync_stat=2.52ms timing sync_sources=1.10ms timing sync_changes=0.12ms timing sync_counts=0.27ms timing sync=4.83ms timing query=1.40ms timing snippet=0.00ms timing render=0.00ms |
+| Append sync: next CLI query finds new line; only tail parsed | PASS | 0s | sync_changes=0.32ms; claude: 2 messages codex: 200001 messages pi: 1 messages 2002 files, 0 changed, 0 skipped |
+| Partial final line is withheld until newline | PASS | 0s | timing startup=0.95ms timing sync_walk=0.76ms timing sync_stat=2.62ms timing sync_sources=1.20ms timing sync_changes=0.11ms timing sync_counts=0.26ms timing sync=4.98ms timing query=1.37ms timing snippet=0.00ms timing render=0.00ms |
 | Partial line is re-read and indexed when completed | PASS | 0s | claude: 2 messages codex: 200002 messages pi: 1 messages 2002 files, 0 changed, 0 skipped |
 | Real stores: read-only independent lower-bound sanity | SKIP | 0s | Set HINDSIGHT_E2E_REAL=1 to opt in to reading this machine’s ~/.claude, ~/.codex, and ~/.pi stores. |
 
