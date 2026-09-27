@@ -275,7 +275,7 @@ printf '\n**Summary:** %d PASS, %d FAIL.\n' "$PASS" "$FAIL" >> "$REPORT"
 redact_root=$(cd "$TMP" && pwd -P)
 for f in "$REPORT" "$TEST/BUGS.md" "$SCREENS"/*; do
   [[ -f $f ]] || continue
-  sed -i '' -e "s#${redact_root}#<fixture>#g" -e "s#${TMP}#<fixture>#g" -e "s#/private/var/folders/[^ |\"']*/T/hindsight-e2e\.[A-Za-z0-9]*#<fixture>#g" -e "s#/var/folders/[^ |\"']*/T/hindsight-e2e\.[A-Za-z0-9]*#<fixture>#g" -e "s#${ROOT}#<repo>#g" "$f"
+  sed -i '' -e "s#${redact_root}#<fixture>#g" -e "s#${TMP}#<fixture>#g" -e "s#/private/var/folders/[^ |\"']*/T/hindsight-e2e\.[A-Za-z0-9]*#<fixture>#g" -e "s#/var/folders/[^ |\"']*/T/hindsight-e2e\.[A-Za-z0-9]*#<fixture>#g" -e "s#${ROOT}#<repo>#g" -E -e "s#(/private)?/var/folders/[^ |\"']*#<fixture>#g" "$f"
 done
 printf '%d PASS / %d FAIL — report: test/e2e-report.md\n' "$PASS" "$FAIL"
 ((FAIL==0))
