@@ -884,24 +884,43 @@ func wrap(s string, w int) []string {
 			out = append(out, "")
 			continue
 		}
+		first := len(out)
 		for len(ln) > 0 {
 			g := uniseg.NewGraphemes(ln)
-			end, cells := 0, 0
+			end, cells, wordStart := 0, 0, 0
+			wasWord := false
 			for g.Next() {
+				start, stop := g.Positions()
+				r, _ := utf8.DecodeRuneInString(g.Str())
+				word := latinWord(r)
+				if word && !wasWord {
+					wordStart = start
+				}
 				v := displayWidth(g.Str())
 				if cells+v > w {
+					if word && wasWord && wordStart > 0 {
+						end = wordStart
+					}
 					break
 				}
-				_, end = g.Positions()
-				cells += v
+				end, cells, wasWord = stop, cells+v, word
 			}
-			if end == 0 {
+			if end == 0 { // A single oversized grapheme cannot be split.
 				g = uniseg.NewGraphemes(ln)
 				g.Next()
 				_, end = g.Positions()
 			}
-			out = append(out, ln[:end])
-			ln = ln[end:]
+			part := ln[:end]
+			if end < len(ln) {
+				part = strings.TrimRightFunc(part, unicode.IsSpace)
+			}
+			if part != "" {
+				out = append(out, part)
+			}
+			ln = strings.TrimLeftFunc(ln[end:], unicode.IsSpace)
+		}
+		if len(out) == first {
+			out = append(out, "")
 		}
 	}
 	return out
