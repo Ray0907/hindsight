@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 )
 
 var termsRE = regexp.MustCompile(`(-?)"([^"]+)"|(-?)(\S+)`)
@@ -275,6 +276,22 @@ func search(ctx context.Context, db *sql.DB, q, harness string) ([]hit, error) {
 	started := time.Now()
 	var sqlq string
 	args := []any{}
+	out := []hit{}
+	fetch := func(query string, values ...any) error {
+		rows, e := db.QueryContext(ctx, query, values...)
+		if e != nil {
+			return e
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var x hit
+			if e = rows.Scan(&x.UID, &x.Harness, &x.SessionID, &x.Project, &x.CWD, &x.Path, &x.ID, &x.Index, &x.TS, &x.Role, &x.Text); e != nil {
+				return e
+			}
+			out = append(out, x)
+		}
+		return rows.Err()
+	}
 	common := false
 	if match != "" && !shortLatin(q) {
 		var e error
@@ -311,7 +328,11 @@ func search(ctx context.Context, db *sql.DB, q, harness string) ([]hit, error) {
 			args = append(args, id)
 		}
 	} else {
-		sqlq = `SELECT s.uid,s.harness,s.native_id,s.project,s.cwd,s.path,m.id,m.idx,m.ts,m.role,m.text FROM messages_fts JOIN messages m ON m.id=messages_fts.rowid JOIN sessions s ON s.uid=m.session_uid WHERE messages_fts MATCH ? `
+		sqlq = `WITH ranked AS MATERIALIZED (SELECT m.id,m.ts,bm25(messages_fts) score FROM messages_fts JOIN messages m ON m.id=messages_fts.rowid `
+		if harness != "" && harness != "all" {
+			sqlq += `JOIN sessions s ON s.uid=m.session_uid `
+		}
+		sqlq += `WHERE messages_fts MATCH ? `
 		args = append(args, match)
 		if shortLatin(q) {
 			var latest string
@@ -327,24 +348,19 @@ func search(ctx context.Context, db *sql.DB, q, harness string) ([]hit, error) {
 			sqlq += `AND s.harness=? `
 			args = append(args, harness)
 		}
-		sqlq += `ORDER BY (m.role='tool'),bm25(messages_fts),m.ts DESC,m.id DESC LIMIT 300`
 	}
-	rows, e := db.QueryContext(ctx, sqlq, args...)
-	if e != nil {
-		return nil, e
-	}
-	out := []hit{}
-	for rows.Next() {
-		var x hit
-		if e = rows.Scan(&x.UID, &x.Harness, &x.SessionID, &x.Project, &x.CWD, &x.Path, &x.ID, &x.Index, &x.TS, &x.Role, &x.Text); e != nil {
-			break
+	var e error
+	if match != "" && !common {
+		query := func(role string) string {
+			return sqlq + `AND m.role` + role + ` ORDER BY score,m.ts DESC,m.id DESC LIMIT ?) SELECT s.uid,s.harness,s.native_id,s.project,s.cwd,s.path,m.id,m.idx,m.ts,m.role,m.text FROM ranked r JOIN messages m ON m.id=r.id JOIN sessions s ON s.uid=m.session_uid ORDER BY r.score,r.ts DESC,r.id DESC`
 		}
-		out = append(out, x)
+		e = fetch(query(`!='tool'`), append(args, 300)...)
+		if e == nil && len(out) < 300 {
+			e = fetch(query(`='tool'`), append(args, 300-len(out))...)
+		}
+	} else {
+		e = fetch(sqlq, args...)
 	}
-	if e == nil {
-		e = rows.Err()
-	}
-	rows.Close()
 	timing("query", started)
 	if e != nil {
 		return nil, e
@@ -384,37 +400,84 @@ func transcript(ctx context.Context, db *sql.DB, uid string) ([]message, error) 
 	return out, rows.Err()
 }
 func snippet(text string, ts []term) string {
+	positive := false
+	for _, t := range ts {
+		if !t.Negative {
+			positive = true
+			break
+		}
+	}
+	if !positive {
+		return displayInline(text)
+	}
+	// Only the excerpt is displayed; keep the full message in hit.Text.
+	if strings.IndexByte(text, '\x1b') < 0 {
+		for _, t := range ts {
+			if t.Negative {
+				continue
+			}
+			word := strings.ToLower(t.Word)
+			at := strings.Index(strings.ToLower(text[:min(len(text), 4096)]), word)
+			if at < 0 {
+				at = strings.Index(strings.ToLower(text), word)
+			}
+			if at < 0 || at >= len(text) {
+				continue
+			}
+			from, end := max(0, at-256), min(len(text), at+2048)
+			for from > 0 && !utf8.RuneStart(text[from]) {
+				from--
+			}
+			for end < len(text) && !utf8.RuneStart(text[end]) {
+				end--
+			}
+			part := displayInline(text[from:end])
+			if pos := strings.Index(strings.ToLower(part), word); pos >= 0 {
+				s := snippetAt(part, pos)
+				if from > 0 && !strings.HasPrefix(s, "…") {
+					s = "…" + s
+				}
+				return clip(s, 320)
+			}
+		}
+	}
 	text = displayInline(text)
-	r := []rune(text)
-	start := 0
 	for _, t := range ts {
 		if t.Negative {
 			continue
 		}
-		at := strings.Index(strings.ToLower(text), strings.ToLower(t.Word))
-		if at >= 0 {
-			start = len([]rune(text[:at]))
-		} else if found := positions(r, t.Word); len(found) > 0 {
-			start = found[0]
-		} else {
-			continue
+		if at := strings.Index(strings.ToLower(text), strings.ToLower(t.Word)); at >= 0 {
+			return clip(snippetAt(text, at), 320)
 		}
-		for cells := 0; start > 0 && cells < 12; {
-			start--
-			cells += displayWidth(string(r[start]))
+		r := []rune(text)
+		if found := positions(r, t.Word); len(found) > 0 {
+			return clip(snippetAt(text, len(string(r[:found[0]]))), 320)
 		}
-		if start > 0 && start < len(r) && unicode.IsLetter(r[start-1]) && !isCJK(r[start]) {
-			for start > 0 && !unicode.IsSpace(r[start-1]) && !isCJK(r[start-1]) {
-				start--
+	}
+	return clip(text, 320)
+}
+func snippetAt(text string, at int) string {
+	start := at
+	for cells := 0; start > 0 && cells < 12; {
+		r, n := utf8.DecodeLastRuneInString(text[:start])
+		start -= n
+		cells += displayWidth(string(r))
+	}
+	if start > 0 && start < len(text) {
+		prev, _ := utf8.DecodeLastRuneInString(text[:start])
+		cur, _ := utf8.DecodeRuneInString(text[start:])
+		if unicode.IsLetter(prev) && !isCJK(cur) {
+			for start > 0 {
+				r, n := utf8.DecodeLastRuneInString(text[:start])
+				if unicode.IsSpace(r) || isCJK(r) {
+					break
+				}
+				start -= n
 			}
 		}
-		break
-	}
-	if start >= len(r) {
-		start = 0
 	}
 	if start > 0 {
-		return "…" + string(r[start:])
+		return "…" + text[start:]
 	}
 	return text
 }
