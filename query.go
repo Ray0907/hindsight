@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -97,11 +98,183 @@ func shortLatin(q string) bool {
 	}
 	return found
 }
+
+// At 90% coverage every token's FTS5 BM25 IDF is clamped near zero.
+// Check the full MATCH too: frequent individual words can form a rare phrase.
+func commonQuery(ctx context.Context, db *sql.DB, q, match string) (bool, error) {
+	words := map[string]bool{}
+	needsCount, positives := false, 0
+	for _, t := range terms(q) {
+		if t.Negative {
+			needsCount = true
+			continue
+		}
+		positives++
+		parts := strings.Fields(t.Word)
+		if positives > 1 || len(parts) > 1 {
+			needsCount = true
+		}
+		for _, word := range parts {
+			for _, r := range word {
+				if r < 'a' || r > 'z' {
+					if r < 'A' || r > 'Z' {
+						return false, nil
+					}
+				}
+			}
+			words[strings.ToLower(word)] = true
+		}
+	}
+	if len(words) == 0 {
+		return false, nil
+	}
+	var total int64
+	if e := db.QueryRowContext(ctx, `SELECT count(*) FROM messages`).Scan(&total); e != nil {
+		return false, e
+	}
+	if total < 300 {
+		return false, nil
+	}
+	for word := range words {
+		var docs int64
+		e := db.QueryRowContext(ctx, `SELECT doc FROM messages_vocab WHERE term=?`, word).Scan(&docs)
+		if e == sql.ErrNoRows {
+			return false, nil
+		}
+		if e != nil {
+			return false, e
+		}
+		if docs*10 < total*9 {
+			return false, nil
+		}
+	}
+	if !needsCount {
+		return true, nil
+	} // One term's prefix includes its frequent exact token.
+	var matched int64
+	if e := db.QueryRowContext(ctx, `SELECT count(*) FROM messages_fts WHERE messages_fts MATCH ?`, match).Scan(&matched); e != nil {
+		return false, e
+	}
+	return matched*10 >= total*9, nil
+}
+
+// Pick by timestamp, then verify exactly against FTS in rowid ranges. Rowids
+// are only seeks into FTS, never a recency limit or a ranking signal.
+func newestMatches(ctx context.Context, db *sql.DB, match, harness string) ([]int64, error) {
+	limit := 400
+	for {
+		query := `SELECT m.id FROM messages m INDEXED BY messages_ts `
+		args := []any{}
+		if harness != "" && harness != "all" {
+			query += `CROSS JOIN sessions s ON s.uid=m.session_uid WHERE s.harness=? `
+			args = append(args, harness)
+		}
+		query += `ORDER BY m.ts DESC,m.id DESC LIMIT ?`
+		args = append(args, limit)
+		rows, e := db.QueryContext(ctx, query, args...)
+		if e != nil {
+			return nil, e
+		}
+		ids := []int64{}
+		for rows.Next() {
+			var id int64
+			if e = rows.Scan(&id); e != nil {
+				break
+			}
+			ids = append(ids, id)
+		}
+		if e == nil {
+			e = rows.Err()
+		}
+		rows.Close()
+		if e != nil {
+			return nil, e
+		}
+		if len(ids) == 0 {
+			return ids, nil
+		}
+
+		sorted := append([]int64(nil), ids...)
+		sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
+		type gap struct {
+			at   int
+			size int64
+		}
+		// Split at the 15 largest gaps: at most 16 FTS seeks, minimal rowid span.
+		gaps := []gap{}
+		for i := 1; i < len(sorted); i++ {
+			if d := sorted[i] - sorted[i-1]; d > 1 {
+				gaps = append(gaps, gap{i, d})
+			}
+		}
+		sort.Slice(gaps, func(i, j int) bool { return gaps[i].size > gaps[j].size })
+		cuts := map[int]bool{}
+		for _, g := range gaps[:min(15, len(gaps))] {
+			cuts[g.at] = true
+		}
+		candidate := make(map[int64]bool, len(ids))
+		for _, id := range ids {
+			candidate[id] = true
+		}
+		matched := map[int64]bool{}
+		lo := sorted[0]
+		for i := 1; i <= len(sorted); i++ {
+			if i < len(sorted) && !cuts[i] {
+				continue
+			}
+			hits, e := db.QueryContext(ctx, `SELECT rowid FROM messages_fts WHERE messages_fts MATCH ? AND rowid BETWEEN ? AND ?`, match, lo, sorted[i-1])
+			if e != nil {
+				return nil, e
+			}
+			for hits.Next() {
+				var id int64
+				if e = hits.Scan(&id); e != nil {
+					break
+				}
+				if candidate[id] {
+					matched[id] = true
+				}
+			}
+			if e == nil {
+				e = hits.Err()
+			}
+			hits.Close()
+			if e != nil {
+				return nil, e
+			}
+			if i < len(sorted) {
+				lo = sorted[i]
+			}
+		}
+		selected := []int64{}
+		for _, id := range ids {
+			if matched[id] {
+				selected = append(selected, id)
+				if len(selected) == 300 {
+					break
+				}
+			}
+		}
+		if len(selected) == 300 || len(ids) < limit {
+			return selected, nil
+		}
+		limit *= 2
+	}
+}
+
 func search(ctx context.Context, db *sql.DB, q, harness string) ([]hit, error) {
 	match := toFTS(q)
 	started := time.Now()
 	var sqlq string
 	args := []any{}
+	common := false
+	if match != "" && !shortLatin(q) {
+		var e error
+		common, e = commonQuery(ctx, db, q, match)
+		if e != nil {
+			return nil, e
+		}
+	}
 	if match == "" {
 		sqlq = `SELECT s.uid,s.harness,s.native_id,s.project,s.cwd,s.path,m.id,m.idx,m.ts,m.role,m.text FROM sessions s JOIN messages m ON s.uid=m.session_uid WHERE m.idx=(SELECT max(idx) FROM messages WHERE session_uid=s.uid) `
 		if harness != "" && harness != "all" {
@@ -109,6 +282,19 @@ func search(ctx context.Context, db *sql.DB, q, harness string) ([]hit, error) {
 			args = append(args, harness)
 		}
 		sqlq += `ORDER BY m.ts DESC,m.id DESC LIMIT 300`
+	} else if common {
+		ids, e := newestMatches(ctx, db, match, harness)
+		if e != nil {
+			return nil, e
+		}
+		if len(ids) == 0 {
+			timing("query", started)
+			return []hit{}, nil
+		}
+		sqlq = `SELECT s.uid,s.harness,s.native_id,s.project,s.cwd,s.path,m.id,m.idx,m.ts,m.role,m.text FROM messages m JOIN sessions s ON s.uid=m.session_uid WHERE m.id IN (` + strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",") + `) ORDER BY m.ts DESC,m.id DESC`
+		for _, id := range ids {
+			args = append(args, id)
+		}
 	} else {
 		sqlq = `SELECT s.uid,s.harness,s.native_id,s.project,s.cwd,s.path,m.id,m.idx,m.ts,m.role,m.text FROM messages_fts JOIN messages m ON m.id=messages_fts.rowid JOIN sessions s ON s.uid=m.session_uid WHERE messages_fts MATCH ? `
 		args = append(args, match)

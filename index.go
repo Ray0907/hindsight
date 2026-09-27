@@ -56,6 +56,7 @@ CREATE INDEX IF NOT EXISTS messages_ts ON messages(ts);
 CREATE TABLE IF NOT EXISTS sources (path TEXT PRIMARY KEY, mtime INTEGER, size INTEGER);
 CREATE TABLE IF NOT EXISTS dirs (path TEXT PRIMARY KEY, mtime INTEGER);
 CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts USING fts5(text, content='messages',content_rowid='id',tokenize='cjk unigram 1 remove_diacritics 2');
+CREATE VIRTUAL TABLE IF NOT EXISTS messages_vocab USING fts5vocab(messages_fts,'row');
 CREATE TRIGGER IF NOT EXISTS messages_ai AFTER INSERT ON messages BEGIN INSERT INTO messages_fts(rowid,text) VALUES(new.id,new.text); END;
 CREATE TRIGGER IF NOT EXISTS messages_ad AFTER DELETE ON messages BEGIN INSERT INTO messages_fts(messages_fts,rowid,text) VALUES('delete',old.id,old.text); END;
 INSERT INTO meta(schema_version) SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM meta);`)
