@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 	"unicode"
@@ -23,8 +24,8 @@ type palette struct {
 	pens                                                [3]string
 }
 
-var light = palette{"#1d3e66", "#b6322d", "#606a74", "#798898", "#8d5d1c", "#147175", "#3b723e", "#eaf1fa", "", [3]string{"#fde89a", "#bdfac8", "#ffe0f2"}}
-var dark = palette{"#c0d3eb", "#f6857a", "#95a0ab", "#6f7e8d", "#ddae6c", "#76c7cc", "#8fc990", "#202730", "", [3]string{"#3c3207", "#193b22", "#492537"}}
+var light = palette{"#1d3e66", "#b6322d", "#606a74", "#798898", "#8d5d1c", "#147175", "#3b723e", "#d2e3f9", "", [3]string{"#fde89a", "#bdfac8", "#ffe0f2"}}
+var dark = palette{"#c0d3eb", "#f6857a", "#95a0ab", "#6f7e8d", "#ddae6c", "#76c7cc", "#8fc990", "#293647", "", [3]string{"#3c3207", "#193b22", "#492537"}}
 
 type pen struct {
 	word  string
@@ -570,7 +571,7 @@ func clip(s string, n int) string {
 	return strings.TrimRightFunc(prefix, unicode.IsSpace) + "…"
 }
 func latinWord(r rune) bool { return unicode.Is(unicode.Latin, r) || unicode.IsDigit(r) || r == '_' }
-func (m model) paint(s string, query bool) string {
+func (m model) paint(s string, query, selected bool) string {
 	ts := terms(m.q)
 	r := []rune(s)
 	h := make([]bool, len(r))
@@ -604,8 +605,11 @@ func (m model) paint(s string, query bool) string {
 			j++
 		}
 		s := string(r[i:j])
-		if h[i] || marks[i] >= 0 {
+		if h[i] || marks[i] >= 0 || selected {
 			style := lipgloss.NewStyle()
+			if selected {
+				style = style.Bold(true)
+			}
 			if h[i] {
 				style = style.Foreground(lipgloss.Color(m.pal.hit)).Underline(true).Bold(true)
 			}
@@ -698,17 +702,27 @@ func (m model) View() string {
 				continue
 			}
 			x := m.rows[idx]
-			agW := 8
-			pjW := 12
-			ageW := 7
-			sw := max(5, w-agW-pjW-ageW-3)
+			selected := idx == m.sel
+			agW, pjW, ageW := 8, 12, 7
+			sw := max(5, w-agW-pjW-ageW-4)
 			sn := clip(displayInline(x.Snippet), sw)
-			row := m.color("▌", m.band(x.Harness)) + " " + pad(m.paint(sn, true), sw) + " " + pad(m.color(x.Harness, m.band(x.Harness)), agW) + pad(m.color(clip(displayInline(x.Project), pjW-1), m.pal.muted), pjW) + m.color(fmt.Sprintf("%*s", ageW, age(x.TS)), m.pal.muted)
-			if idx == m.sel {
-				row = lipgloss.NewStyle().Background(lipgloss.Color(m.pal.selbg)).Render(row)
+			cursor := " "
+			agent := m.color(x.Harness, m.band(x.Harness))
+			project := m.color(clip(displayInline(x.Project), pjW-1), m.pal.muted)
+			when := m.color(fmt.Sprintf("%*s", ageW, age(x.TS)), m.pal.muted)
+			if selected {
+				cursor = m.color("›", m.pal.ink)
+				strong := lipgloss.NewStyle().Bold(true)
+				agent = strong.Render(x.Harness)
+				project = strong.Render(clip(displayInline(x.Project), pjW-1))
+				when = strong.Render(fmt.Sprintf("%*s", ageW, age(x.TS)))
+			}
+			row := cursor + m.color("▌", m.band(x.Harness)) + " " + pad(m.paint(sn, true, selected), sw) + " " + pad(agent, agW) + pad(project, pjW) + when
+			if selected {
+				row = m.selectionRow(row, w)
 			}
 			row = clipANSI(row, w)
-			if m.focus {
+			if m.focus && !selected {
 				row = m.dim(row)
 			}
 			b.WriteString(row + "\n")
@@ -726,7 +740,7 @@ func (m model) View() string {
 	lines := m.pageLines(w)
 	for i := 0; i < pageH; i++ {
 		if i < len(lines) {
-			if m.focus {
+			if m.focus && i != 0 {
 				b.WriteString(m.dim(lines[i]))
 			} else {
 				b.WriteString(lines[i])
@@ -771,6 +785,18 @@ func fitLine(s string, w int) string {
 	s = clipANSI(s, w)
 	return s + strings.Repeat(" ", max(0, w-displayWidth(s)))
 }
+
+var sgrCode = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+func (m model) selectionRow(s string, w int) string {
+	color := lipgloss.ColorProfile().Color(m.pal.selbg)
+	if color == nil || color.Sequence(true) == "" {
+		return pad(s, w)
+	}
+	bg := "\x1b[" + color.Sequence(true) + "m"
+	// Inner foreground/bold styles reset backgrounds; restore the band after each SGR.
+	return bg + sgrCode.ReplaceAllStringFunc(pad(s, w), func(code string) string { return code + bg }) + "\x1b[49m"
+}
 func (m model) pageLines(w int) []string {
 	if m.help {
 		return []string{"  focus    Bright zone takes keys; search dims results", "  query    space = AND · quotes = phrase · -word = exclude", "  ↓ / esc search to results    / results to search", "  ↑ ↓     previous / next message", "  n / N   next / previous hit in transcript", "  h / H   add highlighter / clear highlights", "  v       full transcript (hide hit list)", "  o       open directory in editor", "  y       copy resume command", "  enter   exit and resume in original cwd", "  tab     all · claude · codex · pi", "  ctrl+c  quit"}
@@ -779,8 +805,10 @@ func (m model) pageLines(w int) []string {
 		return nil
 	}
 	sel := m.rows[m.sel]
-	header := "     " + m.color(sel.Project, m.pal.ink) + "  " + m.color(sel.CWD+"  "+sel.TS[:min(10, len(sel.TS))], m.pal.muted) + "  " + m.color(sel.Harness, m.band(sel.Harness))
-	out := []string{clipANSI(header, w)}
+	left := m.color("▌", m.band(sel.Harness)) + " " + m.color(sel.Project, m.pal.ink) + "  " + m.color(sel.CWD+"  "+sel.TS[:min(10, len(sel.TS))], m.pal.muted) + "  " + m.color(sel.Harness, m.band(sel.Harness))
+	right := m.color(fmt.Sprintf("hit %d of %d", m.sel+1, len(m.rows)), m.pal.muted)
+	header := pad(clipANSI(left, max(1, w-displayWidth(right)-1)), w-displayWidth(right)) + right
+	out := []string{header}
 	keep := map[int]bool{}
 	active := toFTS(m.q) != ""
 	start, end := 0, len(m.messages)
@@ -822,27 +850,40 @@ func (m model) pageLines(w int) []string {
 		if who == "user" {
 			who = "you"
 		}
+		selected := i == m.cursor
 		star := "  "
-		if active && m.hitIndex[x.Index] {
+		if selected {
+			star = m.color("› ", m.pal.ink)
+		} else if active && m.hitIndex[x.Index] {
 			star = m.color("✱ ", m.pal.hit)
 		}
 		stamp := x.TS
 		if len(stamp) >= 16 {
 			stamp = stamp[11:16]
 		}
-		prefix := star + " " + m.color(fmt.Sprintf("%-5s", stamp), m.pal.muted) + " " + m.color(pad(who, 5), m.pal.muted) + " "
+		stampText := m.color(fmt.Sprintf("%-5s", stamp), m.pal.muted)
+		roleText := m.color(pad(who, 5), m.pal.muted)
 		if who == "you" {
-			prefix = star + " " + m.color(fmt.Sprintf("%-5s", stamp), m.pal.muted) + " " + m.color(pad(who, 5), m.pal.ink) + " "
+			roleText = m.color(pad(who, 5), m.pal.ink)
 		}
+		if selected {
+			strong := lipgloss.NewStyle().Bold(true)
+			stampText = strong.Render(fmt.Sprintf("%-5s", stamp))
+			roleText = strong.Render(pad(who, 5))
+		}
+		prefix := star + " " + stampText + " " + roleText + " "
 		textW := max(5, w-15)
 		for j, line := range wrap(displayTranscript(x.Text), textW) {
 			p := prefix
 			if j > 0 {
 				p = strings.Repeat(" ", 15)
 			}
-			line = p + m.paint(line, active)
-			if i == m.cursor {
-				line = lipgloss.NewStyle().Background(lipgloss.Color(m.pal.selbg)).Render(line)
+			line = p + m.paint(line, active, selected)
+			if selected {
+				line = m.selectionRow(line, w)
+				if m.focus {
+					line = "\x1b[22m" + line // Override the pane's dim on the selected hit.
+				}
 			}
 			out = append(out, clipANSI(line, w))
 		}
