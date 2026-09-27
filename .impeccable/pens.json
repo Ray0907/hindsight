@@ -1,0 +1,44 @@
+{
+ "yellow": {
+  "light": {
+   "hex": "#fde89a",
+   "oklch": "oklch(0.93 0.1 95)",
+   "fg": 11.26,
+   "hit": 4.93
+  },
+  "dark": {
+   "hex": "#3c3207",
+   "oklch": "oklch(0.32 0.06 95)",
+   "fg": 8.75,
+   "hit": 5.18
+  }
+ },
+ "green": {
+  "light": {
+   "hex": "#bdfac8",
+   "oklch": "oklch(0.93 0.09 150)",
+   "fg": 11.58,
+   "hit": 5.07
+  },
+  "dark": {
+   "hex": "#193b22",
+   "oklch": "oklch(0.32 0.06 150)",
+   "fg": 8.55,
+   "hit": 5.06
+  }
+ },
+ "pink": {
+  "light": {
+   "hex": "#ffe0f2",
+   "oklch": "oklch(0.945 0.05 350)",
+   "fg": 11.27,
+   "hit": 4.94
+  },
+  "dark": {
+   "hex": "#492537",
+   "oklch": "oklch(0.32 0.06 350)",
+   "fg": 9.01,
+   "hit": 5.34
+  }
+ }
+}

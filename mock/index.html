@@ -1,0 +1,258 @@
+<title>hindsight</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>
+:root{--bg:#eef0f3;--fg:#1b1d22;--muted:#5d6270;--line:#d4d8df;
+--sans:"Noto Sans TC",system-ui,sans-serif;--mono:"JetBrains Mono","Noto Sans TC",ui-monospace,Menlo,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#111216;--fg:#e6e7eb;--muted:#9a9fac;--line:#2a2d35}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#111216;--fg:#e6e7eb;--muted:#9a9fac;--line:#2a2d35}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:15px;line-height:1.6;padding:28px 16px 56px}
+.wrap{max-width:1080px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.top{display:flex;flex-wrap:wrap;gap:8px 20px;align-items:baseline;justify-content:space-between}
+.top h1{margin:0;font-size:22px}.top p{margin:0;color:var(--muted);font-size:13px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{font:inherit;font-size:13px;background:none;color:var(--muted);border:0;padding:4px 12px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--fg);color:var(--bg)}
+.seg button:focus-visible{outline:2px solid var(--fg);outline-offset:-2px}
+
+.term{--ink:#1d3e66;--hit:#b6322d;--muted:#606a74;--rule:#798898;--claude:#8d5d1c;--codex:#147175;--pi:#3b723e;--selbg:#eaf1fa;--pen-yellow:#fde89a;--pen-green:#bdfac8;--pen-pink:#ffe0f2;--tbg:#ffffff;--tfg:#2b2d33;background:var(--tbg);color:var(--tfg);font-family:var(--mono);font-size:13px;line-height:1.7;border-radius:10px;border:1px solid var(--line);
+  height:min(640px,86vh);display:flex;flex-direction:column;overflow:hidden;position:relative}
+.term.dark{--ink:#c0d3eb;--hit:#f6857a;--muted:#95a0ab;--rule:#6f7e8d;--claude:#ddae6c;--codex:#76c7cc;--pi:#8fc990;--selbg:#202730;--pen-yellow:#3c3207;--pen-green:#193b22;--pen-pink:#492537;--tbg:#1c1d22;--tfg:#d4d6dc;}
+.zone{transition:opacity .12s}
+.zone.blur{opacity:.42}
+@media (prefers-reduced-motion:reduce){.zone{transition:none}}
+
+.q{display:flex;align-items:center;gap:8px;padding:10px 14px 8px;cursor:text}
+.q .brand{color:var(--ink);font-weight:700}.q .arrow{color:var(--muted)}
+.q input{flex:1;min-width:0;background:none;border:0;outline:0;color:var(--tfg);font:inherit;font-size:14px;caret-color:var(--hit)}
+.q .count{color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.pens{display:flex;flex-wrap:wrap;gap:6px;padding:0 14px 8px;min-height:28px;align-items:center}
+.pens .lbl{color:var(--muted)}
+.pen{font:inherit;color:var(--tfg);border:0;border-radius:3px;padding:0 6px;cursor:pointer}
+.pen:hover{text-decoration:line-through}
+.pens .hint{color:var(--muted)}
+
+.idx{border-top:1px solid var(--rule);overflow-y:auto;flex:0 0 38%;padding:4px 0;cursor:default}
+table.kw{border-collapse:collapse;width:100%;table-layout:fixed}
+.kw td{padding:1px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kw .band{width:3ch;padding-left:14px}
+.kw .snip{padding-right:2ch}
+.kw .ag{width:7ch}.kw .pj{width:11ch;color:var(--muted)}.kw .tm{width:6ch;color:var(--muted);text-align:right;font-variant-numeric:tabular-nums;padding-right:14px}
+.kw tr{cursor:pointer}
+.kw tr.sel{background:var(--selbg)}
+.hh{color:var(--hit);font-weight:700;text-decoration:underline;text-underline-offset:3px}
+mark{color:inherit;border-radius:2px;padding:0 1px}
+mark.yellow{background:var(--pen-yellow)}mark.green{background:var(--pen-green)}mark.pink{background:var(--pen-pink)}
+
+.page{border-top:1px solid var(--rule);flex:1;min-height:0;overflow-y:auto;padding:6px 14px 6px 0}
+.page .hd{display:flex;gap:12px;flex-wrap:wrap;padding:0 0 4px 5ch}
+.page .hd b{color:var(--ink)}.page .hd .m{color:var(--muted)}
+.ln{display:grid;grid-template-columns:5ch 6ch 6ch 1fr;padding:1px 0}
+.ln .star{padding-left:14px}
+.ln.turn{margin-top:10px}
+.gap{padding:4px 0 4px 5ch;color:var(--muted);letter-spacing:.2em}
+.ln .t,.ln .w{color:var(--muted)}.ln.user .w{color:var(--ink)}
+.ln .x{white-space:pre-wrap;overflow-wrap:anywhere}
+.ln.tool .x{color:var(--muted)}
+.ln.cur{background:var(--selbg)}
+.ln .star{color:var(--hit);visibility:hidden}.ln.hit .star{visibility:visible}
+.ln.log .x{color:var(--ink)}
+.term.full .idx{display:none}
+
+.ft{border-top:1px solid var(--rule);padding:6px 14px;color:var(--muted);display:flex;gap:4px 14px;flex-wrap:wrap}
+.ft kbd{font:inherit;color:var(--tfg);font-weight:700}
+.ft .status{color:var(--ink);width:100%}
+.prompt{display:flex;gap:8px;align-items:center;width:100%}
+.prompt input{flex:1;min-width:0;background:none;border:0;border-bottom:1px solid var(--rule);outline:0;color:var(--tfg);font:inherit}
+.help{position:absolute;inset:70px 8% auto;background:var(--tbg);border:1px solid var(--ink);border-radius:6px;padding:14px 18px;display:grid;grid-template-columns:max-content 1fr;gap:4px 16px}
+.help kbd{font:inherit;color:var(--hit);font-weight:700}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:10px 28px;color:var(--muted);font-size:13.5px}
+.notes ol{margin:0;padding-left:1.3em}.notes b{color:var(--fg)}
+@media (max-width:640px){.kw .pj{display:none}.term{height:auto;min-height:600px}.idx{flex-basis:auto;max-height:230px}}
+</style>
+<div class="wrap">
+<div class="top"><div><h1>hindsight</h1><p>Interactive mock · sample data · click into the terminal to start</p></div>
+<div class="seg" role="group" aria-label="Terminal background"><button id="tl" aria-pressed="false">Light terminal</button><button id="td" aria-pressed="false">Dark terminal</button></div></div>
+
+<div class="term" id="term">
+ <div class="zone" id="zq">
+  <label class="q"><span class="brand">hindsight</span><span class="arrow">▸</span>
+   <input id="q" value="index" autocomplete="off" spellcheck="false" aria-label="Search">
+   <span class="count" id="count"></span></label>
+  <div class="pens" id="pens"></div>
+ </div>
+ <div class="zone idx" id="idx"><table class="kw" id="kw"></table></div>
+ <div class="zone page" id="page"></div>
+ <div class="ft" id="ft"></div>
+ <div class="help" id="help" hidden></div>
+</div>
+
+<div class="notes">
+<ol><li><b>The unit is the message.</b> Each row is one message, not a session.</li><li><b>Scan at a glance.</b> Every row starts at the same column; hits stand out in red ink.</li><li><b>Source helps you decide, quietly.</b> A one-cell agent band on the left; agent, project and age in fixed columns on the right.</li><li><b>The text is the content.</b> Message text is never colored.</li></ol>
+<ol start="5"><li><b>One color, one meaning.</b> Red ink is only for search hits; highlighter backgrounds are only for your own marks.</li><li><b>Typing never waits.</b> While the search bar has focus, other zones dim and only typing is accepted.</li><li><b>Your marks.</b> Press <code>h</code> in results to add a highlighter; three colors rotate; click a tag to remove it.</li></ol>
+</div>
+</div>
+<script>
+const S=[
+ {h:"claude",id:"a1b2c3d4",proj:"tokenizer",cwd:"~/code/tokenizer",date:"2026-09-27",age:"2h",m:[
+  ["14:02","user","Swap the README example for a neutral fact, no personal names"],
+  ["14:03","asst","Changed to 日月潭紅茶產於南投縣魚池鄉. MATCH '魚池' hits and '南投魚池' does not, because a bareword is one phrase."],
+  ["14:05","tool","make test · ok 42/42"],
+  ["16:40","user","What about single-character queries like 茶?"],
+  ["16:41","asst","Added the unigram 1 option so single characters are indexed too; 紅茶 and 綠茶 both match. The index grows about 70%."]]},
+ {h:"codex",id:"019a3c2e",proj:"search-api",cwd:"~/code/search-api",date:"2026-09-24",age:"3d",m:[
+  ["09:12","user","_bulk is too slow, 47k docs take ten minutes"],
+  ["09:20","asst","Switched to an external-content table with triggers and one transaction per batch: 6.9 s."],
+  ["13:05","user","Add a Chinese test document"],
+  ["13:06","asst","Test data: 魚池鄉 紅茶, plus an English black tea row for comparison."]]},
+ {h:"pi",id:"2026-09-15_8c1d",proj:"tracer",cwd:"~/code/tracer",date:"2026-09-20",age:"1w",m:[
+  ["21:30","user","I want an origin attribute on spans, for example black tea"],
+  ["21:31","asst","attributes is already a JSON column, so no schema change; query it with json_extract."],
+  ["21:33","tool","go test ./... · ok tracer 0.412s"]]},
+ {h:"claude",id:"7be210aa",proj:"git-store",cwd:"~/code/git-store",date:"2026-09-22",age:"5d",m:[
+  ["10:02","user","How should the WAL be truncated after compaction?"],
+  ["10:04","asst","Write the new snapshot first, confirm the S3 PUT succeeded, then advance the low-water mark. The reverse order loses data."],
+  ["15:10","user","ログの出力も日本語で確認したい"],
+  ["15:12","asst","ログは UTF-8 のまま出力されます。test.sh に日本語のケースを追加しました。"]]},
+ {h:"codex",id:"019a1f07",proj:"tracer",cwd:"~/code/tracer",date:"2026-09-13",age:"2w",m:[
+  ["11:00","user","The context is too long, I want a token budget"],
+  ["11:02","asst","Each trace preview gets a 4k token budget; longer messages keep their first line and the index notes how many were omitted."]]},
+];
+const RES={claude:s=>`claude --resume ${s.id}`,codex:s=>`codex resume ${s.id}`,pi:s=>`pi --session ${s.id}`};
+const EDITOR="zed"; // real app: config, $HINDSIGHT_EDITOR, $VISUAL, then first of zed/cursor/code/subl on PATH
+const PENS=["yellow","green","pink"];
+const $=id=>document.getElementById(id);
+const esc=s=>s.replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const reE=s=>s.replace(/[.*+?^${}()|[\]\\]/g,"\\$&");
+let focus="q",rows=[],sel=0,harness="all",pens=[],cursor=null,prompting=false,status="",full=false;
+
+function parse(q){const pos=[],neg=[];for(const m of q.matchAll(/(-?)"([^"]+)"|(-?)(\S+)/g)){let t=(m[2]??m[4]).toLowerCase();const dash=(m[1]||m[3])==="-";
+  if(dash&&t.startsWith("-"))t="-"+t; // "--flag" is literal, not a negation
+  (dash&&!t.startsWith("-")?neg:pos).push(t.replace(/^-+/,""))}
+ if(!pos.length)neg.length=0; // a bare negation browses
+ return{pos,neg}}
+const CJK=/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/;
+function spans(text,w){const out=[];if(!w)return out;
+ const re=CJK.test(w[0])?new RegExp(reE(w),"gi"):new RegExp("(?<![\\p{L}\\p{N}])"+reE(w),"giu");
+ for(const m of text.matchAll(re))out.push([m.index,m[0].length]);return out}
+const has=(text,w)=>spans(text,w).length>0;
+// paint: search hits (red ink) + user pens (marker bg), non-overlapping spans by priority
+function paint(text,hits){
+ const marks=new Array(text.length).fill(null).map(()=>({hit:false,pen:null}));
+ pens.forEach(p=>spans(text,p.w).forEach(([i,n])=>{for(let k=i;k<i+n;k++)marks[k].pen=p.c}));
+ hits.forEach(w=>spans(text,w).forEach(([i,n])=>{for(let k=i;k<i+n;k++)marks[k].hit=true}));
+ let out="",k=0;
+ while(k<text.length){let j=k;const a=marks[k];while(j<text.length&&marks[j].hit===a.hit&&marks[j].pen===a.pen)j++;
+  let seg=esc(text.slice(k,j));if(a.hit)seg=`<span class="hh">${seg}</span>`;if(a.pen)seg=`<mark class="${a.pen}">${seg}</mark>`;out+=seg;k=j}
+ return out}
+
+function search(){
+ const{pos,neg}=parse($("q").value);rows=[];
+ S.forEach((s,si)=>{if(harness!=="all"&&s.h!==harness)return;
+  s.m.forEach((m,mi)=>{const t=m[2];
+   if(neg.some(w=>has(t,w)))return;
+   if(pos.length&&!pos.every(w=>has(t,w)))return;
+   if(!pos.length&&mi!==s.m.length-1)return;
+   rows.push({si,mi})})});
+ if(sel>=rows.length)sel=Math.max(0,rows.length-1);cursor=null;render()}
+
+function snippet(r,pos){
+ const text=S[r.si].m[r.mi][2].replace(/\n/g," ");
+ const f=pos.length?spans(text,pos[0])[0]:null,i=f?f[0]:-1;
+ let start=i>12?i-12:0;
+ // don't cut a Latin word in half; CJK can start anywhere
+ if(start&&/[\p{L}\p{N}]/u.test(text[start-1])&&!CJK.test(text[start])){const sp=text.slice(start,i).search(/\s/);start=sp<0?i:start+sp+1}
+ return(start?"…":"")+text.slice(start)}
+function render(){
+ const{pos}=parse($("q").value);
+ $("count").textContent=pos.length?`${rows.length} messages · ${new Set(rows.map(r=>r.si)).size} sessions`:`${rows.length} recent sessions`+(harness!=="all"?` · ${harness}`:"");
+ $("pens").innerHTML=`<span class="lbl">highlights</span>`+(pens.length?pens.map((p,i)=>`<button class="pen" style="background:var(--pen-${p.c})" data-i="${i}" title="Remove">${esc(p.w)}</button>`).join(""):`<span class="hint">none · press h in results to add</span>`);
+ $("kw").innerHTML=rows.length?rows.map((r,i)=>{const s=S[r.si],k=snippet(r,pos);
+  return`<tr class="${i===sel?"sel":""}" data-i="${i}"><td class="band" style="color:var(--${s.h})">▌</td><td class="snip">${paint(k,pos)}</td><td class="ag" style="color:var(--${s.h})">${s.h}</td><td class="pj">${esc(s.proj)}</td><td class="tm">${s.age}</td></tr>`}).join("")
+  :`<tr><td style="padding:10px 14px;color:var(--muted);white-space:normal">No message contains all of these words. Drop a word, or remove the "quotes" so the words can appear apart.</td></tr>`;
+ renderPage(pos);renderFt();
+ ["zq","idx","page"].forEach(z=>$(z).classList.toggle("blur",focus==="q"?z!=="zq":z==="zq"));
+ $("term").classList.toggle("full",full);
+ document.querySelector("#kw tr.sel")?.scrollIntoView({block:"nearest"})}
+
+function renderPage(pos){
+ const r=rows[sel];if(!r){$("page").innerHTML="";return}
+ const s=S[r.si];if(cursor===null)cursor=r.mi;
+ let html=`<div class="hd"><b>${esc(s.proj)}</b><span class="m">${esc(s.cwd)}</span><span class="m">${s.date}</span><span class="m" style="color:var(--${s.h})">${s.h}</span></div>`;
+ // Show hits plus the prompt that opened their turn; fold everything else, and
+ // any pause of an hour or more, into one ⋯ so unrelated messages never read as one stream.
+ const isHit=i=>pos.length&&pos.every(x=>has(S[r.si].m[i][2],x));
+ const keep=new Set();
+ s.m.forEach((m,i)=>{if(full||!pos.length||isHit(i)){keep.add(i);
+  if(!full&&pos.length)for(let j=i;j>=0;j--)if(s.m[j][1]==="user"){keep.add(j);break}}});
+ const mins=m=>+m[0].slice(0,2)*60+ +m[0].slice(3);
+ let prev=null,folded=false;
+ s.m.forEach((m,i)=>{
+  if(!keep.has(i)){folded=true;return}
+  if(prev!==null&&(folded||mins(m)-mins(s.m[prev])>=60))html+=`<div class="gap">⋯</div>`;
+  folded=false;
+  html+=`<div class="ln ${m[1]} ${isHit(i)?"hit":""} ${i===cursor?"cur":""} ${prev!==null&&m[1]==="user"?"turn":""}" ${i===cursor?'id="cur"':""}><span class="star">✱</span><span class="t">${m[0]}</span><span class="w">${m[1]==="user"?"you":m[1]}</span><span class="x">${paint(m[2],pos)}</span></div>`;
+  prev=i});
+ if(folded)html+=`<div class="gap">⋯</div>`;
+ $("page").innerHTML=html;$("cur")?.scrollIntoView({block:"nearest"})}
+
+function renderFt(){
+ if(prompting){$("ft").innerHTML=`<label class="prompt"><span style="color:var(--ink)">highlight ▸</span><input id="pin" autocomplete="off" aria-label="Word to highlight"><span><kbd>enter</kbd> add <kbd>esc</kbd> cancel</span></label>`;setTimeout(()=>$("pin")?.focus());return}
+ const keys=focus==="q"
+  ?`<span>type to search</span><span><kbd>↓</kbd>/<kbd>esc</kbd> results</span><span><kbd>enter</kbd> resume</span><span><kbd>tab</kbd> agent</span>`
+  :`<span><kbd>↑↓</kbd> move</span><span><kbd>n/N</kbd> next hit</span><span><kbd>h</kbd> highlight</span><span><kbd>H</kbd> clear</span><span><kbd>v</kbd> full</span><span><kbd>o</kbd> open in ${EDITOR}</span><span><kbd>y</kbd> copy</span><span><kbd>enter</kbd> resume</span><span><kbd>/</kbd> search</span><span><kbd>?</kbd></span>`;
+ $("ft").innerHTML=(status?`<span class="status">${esc(status)}</span>`:"")+keys}
+
+function toFocus(f){focus=f;if(f==="q")$("q").focus();else $("q").blur();render()}
+function now(){const d=new Date();return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0")}
+function resume(){const r=rows[sel];if(!r)return;const s=S[r.si];
+ // the real TUI exits and execs the agent here; the mock can only show the command
+ status=`exits hindsight and runs: cd ${s.cwd} && ${RES[s.h](s)}`;render()}
+function openEditor(){const r=rows[sel];if(!r)return;const s=S[r.si];
+ status=`${now()} opened ${s.cwd} in ${EDITOR}`;renderFt()}
+function copy(){const r=rows[sel];if(!r)return;const c=RES[S[r.si].h](S[r.si]);
+ const done=()=>{status=`${now()} copied: ${c}`;renderFt()};
+ try{navigator.clipboard.writeText(c).then(done,done)}catch(e){done()}}
+
+$("q").addEventListener("input",()=>{sel=0;status="";search()});
+$("q").addEventListener("focus",()=>{if(focus!=="q"){focus="q";render()}});
+$("zq").addEventListener("mousedown",()=>{if(focus!=="q")toFocus("q")});
+$("idx").addEventListener("mousedown",e=>{e.preventDefault();const tr=e.target.closest("tr[data-i]");if(tr){sel=+tr.dataset.i;cursor=null}toFocus("list")});
+$("page").addEventListener("mousedown",e=>{e.preventDefault();toFocus("list")});
+$("pens").addEventListener("click",e=>{const b=e.target.closest(".pen");if(b){pens.splice(+b.dataset.i,1);render()}});
+$("tl").onclick=()=>setTheme("light");$("td").onclick=()=>setTheme("dark");
+function setTheme(t){$("term").classList.toggle("dark",t==="dark");$("tl").setAttribute("aria-pressed",t==="light");$("td").setAttribute("aria-pressed",t==="dark")}
+setTheme(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");
+$("help").innerHTML=[["focus","Only the bright zone takes keys. While the search bar is bright, it takes typing and the rest dims."],["query","space = AND, \"quotes\" = phrase, -word = exclude. English matches word prefixes; Chinese, Japanese and Korean match anywhere."],["↓ / esc","from search to results"],["/","back to search"],["↑ ↓","previous / next message"],["n / N","next / previous hit in the transcript"],["h / H","add a highlighter / clear all (three colors rotate; click a tag to remove)"],["v","full transcript, hides the hit list"],["o","open the project in your editor (zed, cursor, code… configurable)"],["y","copy the resume command"],["enter","exit and resume the session in its own directory"],["tab","cycle agent: all · claude · codex · pi"]].map(([k,v])=>`<kbd>${k}</kbd><span>${v}</span>`).join("");
+
+document.addEventListener("keydown",e=>{
+ if(!$("term").contains(document.activeElement)&&document.activeElement!==document.body)return;
+ if(prompting){
+  if(e.key==="Escape"){prompting=false;renderFt();e.preventDefault()}
+  else if(e.key==="Enter"){const w=$("pin").value.trim().toLowerCase();prompting=false;
+   if(w&&!pens.some(p=>p.w===w))pens.push({w,c:PENS[pens.length%3]});render();e.preventDefault()}
+  return}
+ const r=rows[sel];
+ if(e.key==="Tab"){const o=["all","claude","codex","pi"];harness=o[(o.indexOf(harness)+(e.shiftKey?3:1))%4];sel=0;search();e.preventDefault();return}
+ if(e.key==="Enter"){resume();e.preventDefault();return}
+ if(focus==="q"){
+  if(e.key==="ArrowDown"||e.key==="Escape"){toFocus("list");e.preventDefault()}
+  return}
+ if(!$("help").hidden&&e.key!=="?"){$("help").hidden=true;e.preventDefault();return}
+ const k=e.key;
+ if(k==="ArrowDown"||k==="j"){sel=Math.min(sel+1,rows.length-1);cursor=null;render()}
+ else if(k==="ArrowUp"||k==="k"){if(sel===0){toFocus("q")}else{sel--;cursor=null;render()}}
+ else if(k==="/"){toFocus("q")}
+ else if(k==="h"){prompting=true;renderFt()}
+ else if(k==="H"){pens=[];render()}
+ else if(k==="v"){full=!full;render()}
+ else if(k==="y"){copy()}
+ else if(k==="o"){openEditor()}
+ else if(k==="?"){$("help").hidden=!$("help").hidden}
+ else if((k==="n"||k==="N")&&r){const{pos}=parse($("q").value);const s=S[r.si];
+  const hits=s.m.map((m,i)=>i).filter(i=>pos.length&&pos.every(x=>has(s.m[i][2],x)));
+  if(hits.length){const at=hits.indexOf(cursor);cursor=hits[(at+(k==="n"?1:hits.length-1)+hits.length)%hits.length];renderPage(pos)}}
+ else return;
+ e.preventDefault()});
+search();
+</script>

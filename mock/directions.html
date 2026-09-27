@@ -1,0 +1,156 @@
+<title>hindsight 視覺方向</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>
+:root{--bg:#f4f5f7;--fg:#1b1d22;--muted:#5d6270;--line:#d8dbe1;--card:#ffffff;
+--sans:"Noto Sans TC",system-ui,sans-serif;--mono:"JetBrains Mono","Noto Sans TC",ui-monospace,Menlo,monospace}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#121317;--fg:#e6e7eb;--muted:#9a9fac;--line:#2a2d35;--card:#1a1c21}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#121317;--fg:#e6e7eb;--muted:#9a9fac;--line:#2a2d35;--card:#1a1c21}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:15px;line-height:1.6;padding:32px 16px 64px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:56px}
+.top h1{font-size:28px;margin:0;text-wrap:balance}
+.top p{color:var(--muted);margin:6px 0 0;max-width:70ch}
+.dir{display:flex;flex-direction:column;gap:18px}
+.kicker{margin:0;font-size:12px;letter-spacing:.08em;color:var(--muted);font-weight:700}
+h2{margin:2px 0 4px;font-size:22px}
+.thesis{margin:0;max-width:65ch}
+.raises{margin:8px 0 0;padding-left:1.2em;color:var(--muted)}
+.risk{margin:8px 0 0;color:var(--muted);max-width:75ch}.risk b{color:var(--fg);margin-right:6px}
+.frames{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,500px),1fr));gap:16px}
+figure{margin:0;display:flex;flex-direction:column;gap:6px}
+figcaption{font-size:12px;color:var(--muted)}
+.term{font-family:var(--mono);font-size:12.5px;line-height:1.7;border-radius:8px;padding:12px 14px;overflow-x:auto;border:1px solid var(--line)}
+.term.light{background:#ffffff;color:#2b2d33}.term.dark{background:#1c1d22;color:#d4d6dc}
+.t{display:flex;flex-direction:column;min-width:440px;white-space:pre}
+.t .q{display:flex;gap:6px;padding-bottom:6px}.t .r{margin-left:auto}
+.cur{animation:blink 1s steps(1) infinite}@keyframes blink{50%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.cur{animation:none}}
+.k-ink{color:var(--ink)}.k-hit{color:var(--hit)}.k-muted{color:var(--muted)}.k-rule{color:var(--rule)}
+.k-claude{color:var(--claude)}.k-codex{color:var(--codex)}.k-pi{color:var(--pi)}
+.k-key{color:var(--key);font-weight:700}.k-context{color:var(--context)}.k-text{color:var(--text)}.k-hitmark{color:var(--hitmark)}
+.u{text-decoration:underline;text-underline-offset:3px}
+.sel{background:var(--selbg)}
+.log .hd{border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);padding:2px 0;margin-bottom:4px}
+.log .grid{display:grid;grid-template-columns:minmax(0,15ch) 1fr;gap:0}
+.log .idx{border-right:1px solid var(--rule);padding-right:8px}
+.log .page{padding-left:10px}
+.stamp{font-size:11px;letter-spacing:.05em}
+.ft{border-top:1px solid var(--rule);margin-top:8px;padding-top:4px}
+.kw{border-collapse:collapse;width:100%}.kw td{padding:1px 0}
+.kw .l{text-align:right;width:40%}.kw .c{text-align:center;padding:1px 4px;border-left:1px solid var(--rule);border-right:1px solid var(--rule)}
+.kw .rr{text-align:left;width:38%}.kw .src{padding-left:12px}
+.edge .row{display:flex;gap:10px;padding:4px 0}.edge .band{font-size:15px;line-height:1.5}
+.edge .ft{border-top-color:var(--muted)}
+details{border-top:1px solid var(--line);padding-top:8px}
+summary{cursor:pointer;color:var(--muted);font-size:13px}
+.sw-wrap{overflow-x:auto}
+.sw{border-collapse:collapse;margin-top:10px;font-size:13px;font-variant-numeric:tabular-nums;min-width:560px}
+.sw th,.sw td{text-align:left;padding:5px 12px 5px 0;border-bottom:1px solid var(--line)}
+.chip{display:inline-block;width:14px;height:14px;border-radius:3px;vertical-align:-2px;margin-right:6px;border:1px solid var(--line)}
+.cr{color:var(--muted)}.need{color:var(--muted)}
+.foot{color:var(--muted);font-size:13px;max-width:75ch}
+</style>
+<div class="wrap">
+<div class="top"><h1>hindsight：三個視覺方向</h1>
+<p>Seed c2df528b 擲出「航海日誌」。每個方向都是同一個 TUI、同一組假資料，分別放在淺色與深色終端。字型用的是使用者自己的終端字型，所以風格只靠顏色、框線、版面。範例 session 內容都是假的。</p></div>
+<section class="dir" id="log">
+<header><p class="kicker">THE ROLL · seed c2df528b</p><h2>航海日誌 Deck Log</h2><p class="thesis">每個 session 是一次航程，每則訊息是一筆日誌，命中的那筆用紅墨記下。</p>
+<ul class="raises"><li>紅墨是法律：只有命中能用紅（取自街機像素的調色盤紀律）</li><li>狀態寫成日誌行，不做徽章（取自綠磷光終端）</li><li>續航過的 session 在頁邊蓋 RESUMED，不會消失（取自機票夾）</li></ul><p class="risk"><b>風險</b> 做得不節制就變航海主題皮。只取帳頁的系統：欄位、更次分隔、紅墨，不放錨和舵輪。</p></header>
+<div class="frames">
+<figure><figcaption>淺色終端</figcaption><div class="term light" style="--ink:#1d3e66;--hit:#b6322d;--muted:#606a74;--rule:#798898;--claude:#8d5d1c;--codex:#147175;--pi:#3b723e;--selbg:#eaf1fa"><div class="t log">
+<div class="q"><b class="k-ink">hindsight</b> <span class="k-muted">▸</span> 魚池 紅茶<span class="cur">▌</span><span class="r k-muted">3 航程 · 5 筆</span></div>
+<div class="hd"><span class="k-muted">VOYAGE</span> <b class="k-ink">tokenizer</b>  <span class="k-muted">POSITION</span> <span class="k-ink">~/code/tokenizer</span>  <span class="k-muted">2026-09-27</span></div>
+<div class="grid">
+<div class="idx">
+<div class="sel"><span class="k-hit">✱</span> <span class="k-ink">tokenizer</span> <span class="k-claude">claude</span></div>
+<div>  <span class="k-ink">search-api</span>     <span class="k-codex">codex</span></div>
+<div>  <span class="k-ink">tracer</span>  <span class="k-pi">pi</span></div>
+<div class="stamp k-muted">  └ RESUMED 09-26</div>
+</div>
+<div class="page">
+<div class="k-muted">TIME  WHO   REMARKS</div>
+<div class="k-rule">── 午後更 12–16 ─────────────</div>
+<div><span class="k-muted">14:02 you </span> README 範例換成中性事實</div>
+<div class="sel"><span class="k-muted">14:03 asst</span> 日月潭<span class="k-hit u">紅茶</span>產於南投縣<span class="k-hit u">魚池</span>鄉 <span class="k-hit">✱</span></div>
+<div><span class="k-muted">14:05 tool</span> <span class="k-muted">make test · ok 42/42</span></div>
+<div class="k-rule">── 初更 16–20 ────────────────</div>
+<div><span class="k-muted">16:40 asst</span> 加 unigram 1：單字也索引</div>
+</div></div>
+<div class="ft k-muted">14:08 已在 claude 續航 · ↑↓ 航程  n 下一筆  enter 續航  y 複製</div>
+</div></div></figure>
+<figure><figcaption>深色終端</figcaption><div class="term dark" style="--ink:#c0d3eb;--hit:#f6857a;--muted:#95a0ab;--rule:#6f7e8d;--claude:#ddae6c;--codex:#76c7cc;--pi:#8fc990;--selbg:#202730"><div class="t log">
+<div class="q"><b class="k-ink">hindsight</b> <span class="k-muted">▸</span> 魚池 紅茶<span class="cur">▌</span><span class="r k-muted">3 航程 · 5 筆</span></div>
+<div class="hd"><span class="k-muted">VOYAGE</span> <b class="k-ink">tokenizer</b>  <span class="k-muted">POSITION</span> <span class="k-ink">~/code/tokenizer</span>  <span class="k-muted">2026-09-27</span></div>
+<div class="grid">
+<div class="idx">
+<div class="sel"><span class="k-hit">✱</span> <span class="k-ink">tokenizer</span> <span class="k-claude">claude</span></div>
+<div>  <span class="k-ink">search-api</span>     <span class="k-codex">codex</span></div>
+<div>  <span class="k-ink">tracer</span>  <span class="k-pi">pi</span></div>
+<div class="stamp k-muted">  └ RESUMED 09-26</div>
+</div>
+<div class="page">
+<div class="k-muted">TIME  WHO   REMARKS</div>
+<div class="k-rule">── 午後更 12–16 ─────────────</div>
+<div><span class="k-muted">14:02 you </span> README 範例換成中性事實</div>
+<div class="sel"><span class="k-muted">14:03 asst</span> 日月潭<span class="k-hit u">紅茶</span>產於南投縣<span class="k-hit u">魚池</span>鄉 <span class="k-hit">✱</span></div>
+<div><span class="k-muted">14:05 tool</span> <span class="k-muted">make test · ok 42/42</span></div>
+<div class="k-rule">── 初更 16–20 ────────────────</div>
+<div><span class="k-muted">16:40 asst</span> 加 unigram 1：單字也索引</div>
+</div></div>
+<div class="ft k-muted">14:08 已在 claude 續航 · ↑↓ 航程  n 下一筆  enter 續航  y 複製</div>
+</div></div></figure>
+</div>
+<details><summary>色階與實測對比度（oklch 產生，WCAG 2 對比，淺色底 #ffffff、深色底 #1c1d22）</summary><div class='sw-wrap'><table class='sw'><thead><tr><th>角色</th><th>淺色終端</th><th>深色終端</th><th>門檻</th></tr></thead><tbody><tr><th>ink</th><td><span class="chip" style="background:#1d3e66"></span><code>#1d3e66</code> <span class="cr">10.86:1</span></td><td><span class="chip" style="background:#c0d3eb"></span><code>#c0d3eb</code> <span class="cr">11.02:1</span></td><td class='need'>4.5</td></tr><tr><th>hit</th><td><span class="chip" style="background:#b6322d"></span><code>#b6322d</code> <span class="cr">6.03:1 · 選取列上 5.3:1</span></td><td><span class="chip" style="background:#f6857a"></span><code>#f6857a</code> <span class="cr">6.85:1 · 選取列上 6.14:1</span></td><td class='need'>4.5</td></tr><tr><th>muted</th><td><span class="chip" style="background:#606a74"></span><code>#606a74</code> <span class="cr">5.51:1</span></td><td><span class="chip" style="background:#95a0ab"></span><code>#95a0ab</code> <span class="cr">6.32:1</span></td><td class='need'>4.5</td></tr><tr><th>rule</th><td><span class="chip" style="background:#798898"></span><code>#798898</code> <span class="cr">3.63:1</span></td><td><span class="chip" style="background:#6f7e8d"></span><code>#6f7e8d</code> <span class="cr">4.04:1</span></td><td class='need'>3</td></tr><tr><th>claude</th><td><span class="chip" style="background:#8d5d1c"></span><code>#8d5d1c</code> <span class="cr">5.65:1</span></td><td><span class="chip" style="background:#ddae6c"></span><code>#ddae6c</code> <span class="cr">8.29:1</span></td><td class='need'>4.5</td></tr><tr><th>codex</th><td><span class="chip" style="background:#147175"></span><code>#147175</code> <span class="cr">5.76:1</span></td><td><span class="chip" style="background:#76c7cc"></span><code>#76c7cc</code> <span class="cr">8.66:1</span></td><td class='need'>4.5</td></tr><tr><th>pi</th><td><span class="chip" style="background:#3b723e"></span><code>#3b723e</code> <span class="cr">5.73:1</span></td><td><span class="chip" style="background:#8fc990"></span><code>#8fc990</code> <span class="cr">8.75:1</span></td><td class='need'>4.5</td></tr><tr><th>selbg</th><td><span class="chip" style="background:#eaf1fa"></span><code>#eaf1fa</code> <span class="cr">底色</span></td><td><span class="chip" style="background:#202730"></span><code>#202730</code> <span class="cr">底色</span></td><td class='need'>—</td></tr></tbody></table></div></details>
+</section><section class="dir" id="kwic">
+<header><p class="kicker">IMPECCABLE’S PICK</p><h2>語料索引 Concordance</h2><p class="thesis">所有命中的關鍵詞對齊在同一直欄，左右是上下文，一眼掃完所有出處。</p>
+<p class="risk"><b>風險</b> 在我的候選裡排第一，所以也最接近「大家會做的」。多詞查詢只能以第一詞對齊；CJK 全形寬度要算準。</p></header>
+<div class="frames">
+<figure><figcaption>淺色終端</figcaption><div class="term light" style="--key:#3f40c4;--context:#46474d;--muted:#6c6e78;--rule:#84868c;--claude:#8f5c2f;--codex:#1f6e83;--pi:#397247;--selbg:#eceffe"><div class="t kwic">
+<div class="q"><span class="k-key">❯</span> 紅茶<span class="cur">▌</span><span class="r k-muted">3 行 · 3 session</span></div>
+<table class="kw">
+<tr class="sel"><td class="l k-context">…日月潭</td><td class="c k-key">紅茶</td><td class="rr k-context">產於南投縣魚池鄉…</td><td class="src"><span class="k-claude">claude</span> <span class="k-muted">tokenizer 2h</span></td></tr>
+<tr><td class="l k-context">測試資料：魚池鄉 </td><td class="c k-key">紅茶</td><td class="rr k-context"> 產地，另一筆放…</td><td class="src"><span class="k-codex">codex</span> <span class="k-muted">search-api 3d</span></td></tr>
+<tr><td class="l k-context">…加上產地，例如</td><td class="c k-key">紅茶</td><td class="rr k-context"></td><td class="src"><span class="k-pi">pi</span> <span class="k-muted">tracer 1w</span></td></tr>
+</table>
+<div class="k-rule">────────────────────────────────────────</div>
+<div class="k-muted">you  README 範例想換成中性事實</div>
+<div>asst 改成：日月潭<b class="k-key">紅茶</b>產於南投縣魚池鄉。</div>
+<div class="ft k-muted">↑↓ 行  enter 續航  y 複製  tab harness</div>
+</div></div></figure>
+<figure><figcaption>深色終端</figcaption><div class="term dark" style="--key:#99aaff;--context:#c2c4cb;--muted:#8f929c;--rule:#7a7b82;--claude:#dca476;--codex:#74bdd4;--pi:#87c293;--selbg:#242838"><div class="t kwic">
+<div class="q"><span class="k-key">❯</span> 紅茶<span class="cur">▌</span><span class="r k-muted">3 行 · 3 session</span></div>
+<table class="kw">
+<tr class="sel"><td class="l k-context">…日月潭</td><td class="c k-key">紅茶</td><td class="rr k-context">產於南投縣魚池鄉…</td><td class="src"><span class="k-claude">claude</span> <span class="k-muted">tokenizer 2h</span></td></tr>
+<tr><td class="l k-context">測試資料：魚池鄉 </td><td class="c k-key">紅茶</td><td class="rr k-context"> 產地，另一筆放…</td><td class="src"><span class="k-codex">codex</span> <span class="k-muted">search-api 3d</span></td></tr>
+<tr><td class="l k-context">…加上產地，例如</td><td class="c k-key">紅茶</td><td class="rr k-context"></td><td class="src"><span class="k-pi">pi</span> <span class="k-muted">tracer 1w</span></td></tr>
+</table>
+<div class="k-rule">────────────────────────────────────────</div>
+<div class="k-muted">you  README 範例想換成中性事實</div>
+<div>asst 改成：日月潭<b class="k-key">紅茶</b>產於南投縣魚池鄉。</div>
+<div class="ft k-muted">↑↓ 行  enter 續航  y 複製  tab harness</div>
+</div></div></figure>
+</div>
+<details><summary>色階與實測對比度（oklch 產生，WCAG 2 對比，淺色底 #ffffff、深色底 #1c1d22）</summary><div class='sw-wrap'><table class='sw'><thead><tr><th>角色</th><th>淺色終端</th><th>深色終端</th><th>門檻</th></tr></thead><tbody><tr><th>key</th><td><span class="chip" style="background:#3f40c4"></span><code>#3f40c4</code> <span class="cr">7.66:1 · 選取列上 6.69:1</span></td><td><span class="chip" style="background:#99aaff"></span><code>#99aaff</code> <span class="cr">7.65:1 · 選取列上 6.65:1</span></td><td class='need'>4.5</td></tr><tr><th>context</th><td><span class="chip" style="background:#46474d"></span><code>#46474d</code> <span class="cr">9.26:1</span></td><td><span class="chip" style="background:#c2c4cb"></span><code>#c2c4cb</code> <span class="cr">9.66:1</span></td><td class='need'>4.5</td></tr><tr><th>muted</th><td><span class="chip" style="background:#6c6e78"></span><code>#6c6e78</code> <span class="cr">5.07:1</span></td><td><span class="chip" style="background:#8f929c"></span><code>#8f929c</code> <span class="cr">5.42:1</span></td><td class='need'>4.5</td></tr><tr><th>rule</th><td><span class="chip" style="background:#84868c"></span><code>#84868c</code> <span class="cr">3.64:1</span></td><td><span class="chip" style="background:#7a7b82"></span><code>#7a7b82</code> <span class="cr">3.99:1</span></td><td class='need'>3</td></tr><tr><th>claude</th><td><span class="chip" style="background:#8f5c2f"></span><code>#8f5c2f</code> <span class="cr">5.62:1</span></td><td><span class="chip" style="background:#dca476"></span><code>#dca476</code> <span class="cr">7.7:1</span></td><td class='need'>4.5</td></tr><tr><th>codex</th><td><span class="chip" style="background:#1f6e83"></span><code>#1f6e83</code> <span class="cr">5.81:1</span></td><td><span class="chip" style="background:#74bdd4"></span><code>#74bdd4</code> <span class="cr">7.99:1</span></td><td class='need'>4.5</td></tr><tr><th>pi</th><td><span class="chip" style="background:#397247"></span><code>#397247</code> <span class="cr">5.72:1</span></td><td><span class="chip" style="background:#87c293"></span><code>#87c293</code> <span class="cr">8.15:1</span></td><td class='need'>4.5</td></tr><tr><th>selbg</th><td><span class="chip" style="background:#eceffe"></span><code>#eceffe</code> <span class="cr">底色</span></td><td><span class="chip" style="background:#242838"></span><code>#242838</code> <span class="cr">底色</span></td><td class='need'>—</td></tr></tbody></table></div></details>
+</section><section class="dir" id="edge">
+<header><p class="kicker">挑戰者 · competitive</p><h2>虹彩雲緣 Iridescent Edge</h2><p class="thesis">文字區永遠無彩色，顏色只活在左邊一格寬的色帶上。</p>
+<p class="risk"><b>風險</b> 最不干擾閱讀，但也最沒辨識度；淺色終端上色帶只有 3.5–4.6:1，剛過非文字門檻。</p></header>
+<div class="frames">
+<figure><figcaption>淺色終端</figcaption><div class="term light" style="--text:#3d3d3d;--muted:#6f6f6f;--claude:#2a9b7c;--codex:#c46183;--pi:#8264c8;--hitmark:#555555;--selbg:#f2f2f2"><div class="t edge">
+<div class="q"><span class="k-muted">hindsight</span>  魚池 紅茶<span class="cur">▌</span><span class="r k-muted">3 session</span></div>
+<div class="row sel"><span class="band k-claude">▌</span><div><div class="k-text">tokenizer <span class="k-muted">· claude · 2h</span></div><div class="k-text">日月潭<b class="k-hitmark u">紅茶</b>產於南投縣<b class="k-hitmark u">魚池</b>鄉</div></div></div>
+<div class="row"><span class="band k-codex">▌</span><div><div class="k-text">search-api <span class="k-muted">· codex · 3d</span></div><div class="k-muted">測試資料：魚池鄉 紅茶 產地…</div></div></div>
+<div class="row"><span class="band k-pi">▌</span><div><div class="k-text">tracer <span class="k-muted">· pi · 1w</span></div><div class="k-muted">span attribute 加上產地，例如紅茶</div></div></div>
+<div class="ft k-muted">↑↓  enter 續航  y 複製  tab harness</div>
+</div></div></figure>
+<figure><figcaption>深色終端</figcaption><div class="term dark" style="--text:#d1d1d1;--muted:#929292;--claude:#76d3b4;--codex:#ed9cb5;--pi:#b6a3f0;--hitmark:#eeeeee;--selbg:#262626"><div class="t edge">
+<div class="q"><span class="k-muted">hindsight</span>  魚池 紅茶<span class="cur">▌</span><span class="r k-muted">3 session</span></div>
+<div class="row sel"><span class="band k-claude">▌</span><div><div class="k-text">tokenizer <span class="k-muted">· claude · 2h</span></div><div class="k-text">日月潭<b class="k-hitmark u">紅茶</b>產於南投縣<b class="k-hitmark u">魚池</b>鄉</div></div></div>
+<div class="row"><span class="band k-codex">▌</span><div><div class="k-text">search-api <span class="k-muted">· codex · 3d</span></div><div class="k-muted">測試資料：魚池鄉 紅茶 產地…</div></div></div>
+<div class="row"><span class="band k-pi">▌</span><div><div class="k-text">tracer <span class="k-muted">· pi · 1w</span></div><div class="k-muted">span attribute 加上產地，例如紅茶</div></div></div>
+<div class="ft k-muted">↑↓  enter 續航  y 複製  tab harness</div>
+</div></div></figure>
+</div>
+<details><summary>色階與實測對比度（oklch 產生，WCAG 2 對比，淺色底 #ffffff、深色底 #1c1d22）</summary><div class='sw-wrap'><table class='sw'><thead><tr><th>角色</th><th>淺色終端</th><th>深色終端</th><th>門檻</th></tr></thead><tbody><tr><th>text</th><td><span class="chip" style="background:#3d3d3d"></span><code>#3d3d3d</code> <span class="cr">10.86:1</span></td><td><span class="chip" style="background:#d1d1d1"></span><code>#d1d1d1</code> <span class="cr">11.02:1</span></td><td class='need'>4.5</td></tr><tr><th>muted</th><td><span class="chip" style="background:#6f6f6f"></span><code>#6f6f6f</code> <span class="cr">5.02:1</span></td><td><span class="chip" style="background:#929292"></span><code>#929292</code> <span class="cr">5.41:1</span></td><td class='need'>4.5</td></tr><tr><th>claude</th><td><span class="chip" style="background:#2a9b7c"></span><code>#2a9b7c</code> <span class="cr">3.46:1</span></td><td><span class="chip" style="background:#76d3b4"></span><code>#76d3b4</code> <span class="cr">9.41:1</span></td><td class='need'>3</td></tr><tr><th>codex</th><td><span class="chip" style="background:#c46183"></span><code>#c46183</code> <span class="cr">3.9:1</span></td><td><span class="chip" style="background:#ed9cb5"></span><code>#ed9cb5</code> <span class="cr">8.03:1</span></td><td class='need'>3</td></tr><tr><th>pi</th><td><span class="chip" style="background:#8264c8"></span><code>#8264c8</code> <span class="cr">4.56:1</span></td><td><span class="chip" style="background:#b6a3f0"></span><code>#b6a3f0</code> <span class="cr">7.6:1</span></td><td class='need'>3</td></tr><tr><th>hitmark</th><td><span class="chip" style="background:#555555"></span><code>#555555</code> <span class="cr">7.46:1 · 選取列上 6.66:1</span></td><td><span class="chip" style="background:#eeeeee"></span><code>#eeeeee</code> <span class="cr">14.5:1 · 選取列上 13.04:1</span></td><td class='need'>4.5</td></tr><tr><th>selbg</th><td><span class="chip" style="background:#f2f2f2"></span><code>#f2f2f2</code> <span class="cr">底色</span></td><td><span class="chip" style="background:#262626"></span><code>#262626</code> <span class="cr">底色</span></td><td class='need'>—</td></tr></tbody></table></div></details>
+</section>
+<p class="foot">色階由 oklch 產生（同色相、控制明度），對比度是實際算出的 WCAG 2 值，不是估的。深色底以 #1c1d22 為代表，實際會隨使用者主題變化，Go 版會偵測終端背景切換兩套色。</p>
+</div>

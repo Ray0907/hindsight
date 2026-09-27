@@ -1,0 +1,141 @@
+{
+  "title": "hindsight 的視覺世界",
+  "question": "Seed c2df528b 指派了「航海日誌」。保留它、選一個替代方案，或重擲。",
+  "options": [
+    {
+      "id": "assigned",
+      "label": "航海日誌 Deck Log",
+      "kicker": "THE ROLL",
+      "lineage": "船舶航海日誌：分值更、畫格欄位、紅墨記要事",
+      "thesis": "每個 session 是一次航程，每則訊息是一筆日誌，命中的那筆用紅墨記下。",
+      "palette": ["#22365a", "#b0302a", "#8a9bb0", "#c9d6ea", "#ef7a6d", "#4f5d70"],
+      "materials": ["畫格帳頁欄位 TIME │ WHO │ REMARKS", "每四小時一更的分隔線", "紅墨只記命中"],
+      "viewport": "上方頁眉寫 VOYAGE 專案、POSITION cwd、日期；左側航程索引，右側是日誌頁，依更次分段，命中那行用紅墨加 ✱。",
+      "risk": "做得不節制就會變成航海主題皮（錨、舵輪）；只能取帳頁的系統，不能取裝飾。",
+      "raised": [
+        {"from": "challenger-arcade", "raise": "紅墨是法律：只有命中能用紅，其他狀態一律不准用紅。"},
+        {"from": "challenger-phosphor", "raise": "狀態寫成日誌行，不做徽章：「14:02 已在 claude 續航」。"},
+        {"from": "challenger-ticket", "raise": "東西不會消失，只會被蓋章：續航過的 session 在頁邊蓋 RESUMED。"}
+      ],
+      "wireframe": {"cols": 12, "rows": 10, "regions": [
+        {"label": "VOYAGE · POSITION · DATE 頁眉", "x": 0, "y": 0, "w": 12, "h": 1, "accent": true},
+        {"label": "航程索引", "x": 0, "y": 1, "w": 4, "h": 8},
+        {"label": "日誌頁 TIME│WHO│REMARKS", "x": 4, "y": 1, "w": 8, "h": 8},
+        {"label": "更次 / 按鍵", "x": 0, "y": 9, "w": 12, "h": 1}
+      ]}
+    },
+    {
+      "id": "model-pick",
+      "label": "語料索引 Concordance",
+      "kicker": "IMPECCABLE’S PICK",
+      "lineage": "語言學 KWIC 語料索引（key word in context）",
+      "thesis": "所有命中的關鍵詞對齊在同一直欄，左右是上下文，一眼掃完所有出處。",
+      "palette": ["#1f2330", "#3b3bd6", "#7a8194", "#e4e6ee", "#9d9dff", "#6b7285"],
+      "materials": ["關鍵詞置中直欄", "上下文靠內對齊", "出處欄 harness·專案·時間"],
+      "viewport": "整個畫面是一張 KWIC 表：左上下文靠右、關鍵詞一欄、右上下文靠左；最右一欄是出處。選到的那行展開成 transcript。",
+      "risk": "在我的候選裡排第一，對搜尋工具很直覺；多個關鍵詞時只能以第一個對齊，CJK 全形寬度必須算準。",
+      "wireframe": {"cols": 12, "rows": 10, "regions": [
+        {"label": "查詢列", "x": 0, "y": 0, "w": 12, "h": 1},
+        {"label": "左上下文", "x": 0, "y": 1, "w": 4, "h": 5},
+        {"label": "關鍵詞", "x": 4, "y": 1, "w": 2, "h": 5, "accent": true},
+        {"label": "右上下文", "x": 6, "y": 1, "w": 4, "h": 5},
+        {"label": "出處", "x": 10, "y": 1, "w": 2, "h": 5},
+        {"label": "展開的 transcript", "x": 0, "y": 6, "w": 12, "h": 4}
+      ]}
+    },
+    {
+      "id": "challenger-cloud",
+      "label": "虹彩雲緣 Iridescent Edge",
+      "verdict": "competitive",
+      "lineage": "雲緣繞射的虹彩光帶",
+      "thesis": "文字區永遠無彩色，顏色只活在邊緣的一條細帶上。",
+      "palette": ["#3c4452", "#7fd1b9", "#e7a0b5", "#9b87f5", "#c7ccd6"],
+      "materials": ["無彩色內文", "左側細色帶：薄荷 claude、玫瑰 codex、紫 pi", "命中處色帶變亮"],
+      "viewport": "大量留白的單欄結果，每筆左邊一條 1 格寬的色帶標出 harness 與命中密度；內文全灰階。",
+      "case": "產品清晰度最強（裝飾完全不碰內文），但使用者認不出這是「翻歷史」的工具。",
+      "risk": "太安靜會像沒有個性；色帶在淺色終端的對比要另外調。",
+      "hero": "https://impeccable.style/worlds/cards/clouds-storms-auroras-iridescent-cloud-edge-hero.webp",
+      "wireframe": {"cols": 12, "rows": 10, "regions": [
+        {"label": "查詢", "x": 1, "y": 0, "w": 11, "h": 1},
+        {"label": "色帶", "x": 0, "y": 1, "w": 1, "h": 9, "accent": true},
+        {"label": "結果 + 預覽單欄", "x": 1, "y": 1, "w": 11, "h": 9}
+      ]}
+    },
+    {
+      "id": "challenger-phosphor",
+      "label": "綠磷光終端",
+      "verdict": "declined",
+      "lineage": "午夜機房的 P1 綠磷光管",
+      "thesis": "整個介面是一段會呼吸的連續 transcript。",
+      "palette": ["#0b140d", "#33ff66", "#1a8a3a"],
+      "materials": ["磷光殘影", "單一點陣字"],
+      "viewport": "單欄滾動紀錄，游標行發光。",
+      "case": "正是你說的「又一個終端皮」，而且淺色終端直接失效。",
+      "risk": "黑底加螢光綠是 AI 最常出的樣子。",
+      "kept": "狀態自己印成一行字，不做 chrome。"
+    },
+    {
+      "id": "challenger-arcade",
+      "label": "街機像素",
+      "verdict": "declined",
+      "lineage": "CRT 街機像素與掃描線",
+      "thesis": "16 色調色盤，每種狀態是調色盤法律。",
+      "palette": ["#000000", "#f8d038", "#e04040", "#40a0f8"],
+      "materials": ["像素格", "掃描線"],
+      "viewport": "磚格排列的關卡畫面。",
+      "case": "分數、道具的語意對不上搜尋歷史。",
+      "risk": "復古玩具感。",
+      "kept": "顏色是法律：命中色只給命中用。"
+    },
+    {
+      "id": "challenger-ticket",
+      "label": "噴射時代機票夾",
+      "verdict": "declined",
+      "lineage": "複寫聯機票與行李牌",
+      "thesis": "每段航程是一張撕下的票根。",
+      "palette": ["#1b2a52", "#c8102e", "#6a4c93", "#ffffff"],
+      "materials": ["複寫紙", "VOID 印章"],
+      "viewport": "票根一張張疊起。",
+      "case": "旅程語意跟指派的航海日誌重疊，但更弱。",
+      "risk": "紙本擬物在 TUI 撐不起來。",
+      "kept": "狀態蓋章，不消失。"
+    },
+    {
+      "id": "challenger-consumer",
+      "label": "溫暖消費 App",
+      "verdict": "declined",
+      "lineage": "圓角卡片的消費型 App",
+      "thesis": "唯一的飽和色只出現在可以按的東西上。",
+      "palette": ["#f6efe7", "#ffffff", "#ff5a36"],
+      "materials": ["大圓角卡片", "底部導覽列"],
+      "viewport": "單欄卡片加底部列。",
+      "case": "觸控 App 的文法不適合鍵盤優先的 TUI。",
+      "risk": "跟終端格格不入。",
+      "kept": "用人話寫標籤。"
+    },
+    {
+      "id": "challenger-storm",
+      "label": "字母風暴",
+      "verdict": "declined",
+      "lineage": "超現實的文字天氣",
+      "thesis": "打下的字會凝結成天氣。",
+      "palette": ["#ffffff", "#111111", "#c0c4cc"],
+      "materials": ["巨型怪誕體", "粒子"],
+      "viewport": "一個字一場天氣。",
+      "case": "終端無法控制字型，動畫也會拖慢打字。",
+      "risk": "違反「動畫不拖慢打字」。",
+      "kept": "每次按鍵，結果區立刻重組。"
+    }
+  ],
+  "reroll": {"registers": ["safer", "bolder"]},
+  "canon": true,
+  "canonCard": {
+    "label": "類別標準：雙欄 fzf / lazygit",
+    "thesis": "左列表、右預覽、圓角框、一個強調色，照業界做到最好。",
+    "palette": ["#151821", "#d6d9e0", "#e8b04b"],
+    "materials": ["圓角框線", "fzf 式預覽窗"],
+    "viewport": "就是目前 mock 的樣子。",
+    "risk": "照定義就跟競品分不出來。"
+  },
+  "steer": true
+}
