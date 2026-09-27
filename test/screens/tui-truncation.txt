@@ -1,0 +1,40 @@
+hindsight ▸ cutprobe▌                                                                            3 messages · 3 sessions
+highlights none · press h in results to add
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+▌ cutprobe alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu…            pi      demo             0m
+▌ cutprobe alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu…            codex   demo             0m
+▌ cutprobe alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu…            claude  demo             0m
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+     demo  <fixture>/home/work/demo  2026-09-27  pi
+✱  10:30 you   cutprobe alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu supercalifragilisticexpial
+               idocious tail
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+type to search   ↓/esc results   enter resume   tab agent

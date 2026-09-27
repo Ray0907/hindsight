@@ -1,0 +1,40 @@
+hindsight ▸ snapshot                                                                             6 messages · 3 sessions
+highlights none · press h in results to add
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+     demo  <fixture>/home/work/demo  2026-09-27  codex
+✱  10:05 you   Search for snapshot, resum, json_extract, low-water, S3, and cjk.c.
+✱  10:05 asst  SNAPSHOT is ready; resuming is safe, but a shorter prefix is not a match. The phrase is black tea.
+
+   10:06 you   魚池 appears inside 日月潭紅茶產於南投縣魚池鄉. 日本語の検索と 한국어 검색.
+   10:06 asst  紅茶 is tea; single-character 茶 should match. naïve accents are searchable.
+
+   10:07 you   Parser continues after malformed line: recoverytoken.
+
+   10:30 you   cutprobe alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu supercalifragilisticexpial
+               idocious tail
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+↑↓ move  n/N next hit  h highlight  H clear  v full  o open in Finder  y copy  enter resume  / search  ?

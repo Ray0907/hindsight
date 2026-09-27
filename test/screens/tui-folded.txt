@@ -1,0 +1,40 @@
+hindsight ▸ snapshot                                                                             6 messages · 3 sessions
+highlights none · press h in results to add
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+▌ Search for snapshot, resum, json_extract, low-water, S3, and cjk.c.                        codex   demo             0m
+▌ Find SNAPSHOT and resuming; test S3, json_extract, low-water, and cjk.c.                   pi      demo             0m
+▌ Find the snapshot and resume path; resuming should preserve JSON output.                   claude  demo             0m
+▌ SNAPSHOT: json_extract handles low-water marks, S3 uploads, cjk.c, and naïve input.        claude  demo             0m
+▌ A snapshot can resume safely; the phrase is black tea, and naïve input is searchable.      pi      demo             0m
+▌ SNAPSHOT is ready; resuming is safe, but a shorter prefix is not a match. The phrase is…   codex   demo             0m
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+     demo  <fixture>/home/work/demo  2026-09-27  codex
+✱  10:05 you   Search for snapshot, resum, json_extract, low-water, S3, and cjk.c.
+✱  10:05 asst  SNAPSHOT is ready; resuming is safe, but a shorter prefix is not a match. The phrase is black tea.
+     ⋯
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+↑↓ move  n/N next hit  h highlight  H clear  v full  o open in Finder  y copy  enter resume  / search  ?
