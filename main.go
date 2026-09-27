@@ -15,7 +15,8 @@ import (
 	"github.com/mattn/go-isatty"
 )
 
-const version = "0.1.0"
+// version is overridden at release time via -ldflags "-X main.version=..."
+var version = "dev"
 
 var output io.Writer = os.Stdout
 

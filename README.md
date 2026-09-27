@@ -4,14 +4,32 @@ Search local Claude Code, Codex and Pi transcripts at message granularity, inclu
 
 ## Install
 
-Requires Go 1.26+ and a C compiler. From this checkout:
+### Download (macOS)
+
+Grab the archive for your Mac from [Releases](https://github.com/Ray0907/hindsight/releases/latest): `darwin_arm64` for Apple Silicon, `darwin_amd64` for Intel.
 
 ```sh
-make build
-# or: go install -tags sqlite_fts5 github.com/Ray0907/hindsight
+arch=$(uname -m | sed 's/x86_64/amd64/')
+curl -fsSLO "https://github.com/Ray0907/hindsight/releases/latest/download/SHA256SUMS"
+file=$(grep "darwin_${arch}" SHA256SUMS | awk '{print $2}')
+curl -fsSLO "https://github.com/Ray0907/hindsight/releases/latest/download/${file}"
+shasum -a 256 -c SHA256SUMS --ignore-missing
+tar -xzf "$file" hindsight && sudo mv hindsight /usr/local/bin/
 ```
 
-The `sqlite_fts5` build tag is required. Homebrew distribution is planned, not yet available.
+The binary is not notarized. Downloaded with `curl` it runs as is; if you downloaded it in a browser and macOS blocks it, run `xattr -d com.apple.quarantine /usr/local/bin/hindsight`.
+
+### From source
+
+Requires Go 1.26+ and a C compiler (Xcode Command Line Tools).
+
+```sh
+go install -tags sqlite_fts5 github.com/Ray0907/hindsight@latest
+# or, from a checkout:
+make build
+```
+
+The `sqlite_fts5` build tag is required.
 
 ## Use
 
@@ -53,3 +71,7 @@ Editor resolution: `HINDSIGHT_EDITOR`, then `VISUAL`, then the first available `
 **Local-only and read-only:** transcript stores are never changed or uploaded. The only persistent writes are the search index under `$XDG_CACHE_HOME/hindsight/index.db` (or `~/.cache/hindsight/index.db`). Override it with `HINDSIGHT_INDEX`; override source roots independently with `HINDSIGHT_CLAUDE_DIR`, `HINDSIGHT_CODEX_DIR`, `HINDSIGHT_PI_DIR`. `$HOME` controls the default roots. Set `HINDSIGHT_DEBUG_TIMING=1` for startup/sync/query/snippet/render timings on stderr.
 
 Search tokenization uses [fts5-cjk](https://github.com/Ray0907/fts5-cjk), statically linked under its original license in `internal/cjk/`.
+
+## License
+
+MIT. Bundles [fts5-cjk](https://github.com/Ray0907/fts5-cjk) (MIT) and SQLite headers (public domain).
