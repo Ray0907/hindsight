@@ -160,14 +160,22 @@ func commonQuery(ctx context.Context, db *sql.DB, q, match string) (bool, error)
 
 // Pick by timestamp, then verify exactly against FTS in rowid ranges. Rowids
 // are only seeks into FTS, never a recency limit or a ranking signal.
-func newestMatches(ctx context.Context, db *sql.DB, match, harness string) ([]int64, error) {
+func newestMatches(ctx context.Context, db *sql.DB, match, harness string, tool bool, want int) ([]int64, error) {
 	limit := 400
 	for {
+		// ponytail: the ts index scans past the other role; add partial role/ts indexes only if tool-heavy corpora make this slow.
 		query := `SELECT m.id FROM messages m INDEXED BY messages_ts `
 		args := []any{}
 		if harness != "" && harness != "all" {
-			query += `CROSS JOIN sessions s ON s.uid=m.session_uid WHERE s.harness=? `
+			query += `CROSS JOIN sessions s ON s.uid=m.session_uid WHERE s.harness=? AND `
 			args = append(args, harness)
+		} else {
+			query += `WHERE `
+		}
+		if tool {
+			query += `m.role='tool' `
+		} else {
+			query += `m.role!='tool' `
 		}
 		query += `ORDER BY m.ts DESC,m.id DESC LIMIT ?`
 		args = append(args, limit)
@@ -250,12 +258,12 @@ func newestMatches(ctx context.Context, db *sql.DB, match, harness string) ([]in
 		for _, id := range ids {
 			if matched[id] {
 				selected = append(selected, id)
-				if len(selected) == 300 {
+				if len(selected) == want {
 					break
 				}
 			}
 		}
-		if len(selected) == 300 || len(ids) < limit {
+		if len(selected) == want || len(ids) < limit {
 			return selected, nil
 		}
 		limit *= 2
@@ -283,15 +291,22 @@ func search(ctx context.Context, db *sql.DB, q, harness string) ([]hit, error) {
 		}
 		sqlq += `ORDER BY m.ts DESC,m.id DESC LIMIT 300`
 	} else if common {
-		ids, e := newestMatches(ctx, db, match, harness)
+		ids, e := newestMatches(ctx, db, match, harness, false, 300)
 		if e != nil {
 			return nil, e
+		}
+		if len(ids) < 300 {
+			tools, err := newestMatches(ctx, db, match, harness, true, 300-len(ids))
+			if err != nil {
+				return nil, err
+			}
+			ids = append(ids, tools...)
 		}
 		if len(ids) == 0 {
 			timing("query", started)
 			return []hit{}, nil
 		}
-		sqlq = `SELECT s.uid,s.harness,s.native_id,s.project,s.cwd,s.path,m.id,m.idx,m.ts,m.role,m.text FROM messages m JOIN sessions s ON s.uid=m.session_uid WHERE m.id IN (` + strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",") + `) ORDER BY m.ts DESC,m.id DESC`
+		sqlq = `SELECT s.uid,s.harness,s.native_id,s.project,s.cwd,s.path,m.id,m.idx,m.ts,m.role,m.text FROM messages m JOIN sessions s ON s.uid=m.session_uid WHERE m.id IN (` + strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",") + `) ORDER BY (m.role='tool'),m.ts DESC,m.id DESC`
 		for _, id := range ids {
 			args = append(args, id)
 		}
@@ -312,7 +327,7 @@ func search(ctx context.Context, db *sql.DB, q, harness string) ([]hit, error) {
 			sqlq += `AND s.harness=? `
 			args = append(args, harness)
 		}
-		sqlq += `ORDER BY bm25(messages_fts),m.ts DESC,m.id DESC LIMIT 300`
+		sqlq += `ORDER BY (m.role='tool'),bm25(messages_fts),m.ts DESC,m.id DESC LIMIT 300`
 	}
 	rows, e := db.QueryContext(ctx, sqlq, args...)
 	if e != nil {
