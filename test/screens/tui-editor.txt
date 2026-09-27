@@ -28,5 +28,5 @@ highlights none · press h in results to add
 
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────
-23:15 opened <fixture>/home/work/demo…
+23:16 opened <fixture>/home/work/demo…
 ↑↓ move  n/N next hit  h highlight  H clear  v full  o open in <fixture>
