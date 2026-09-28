@@ -39,9 +39,9 @@ Query: space means AND; "black tea" is a phrase; -word excludes;
        kioku -- --help (or kioku '"help"' for the word help).
 JSON: {shown,total,total_sessions,hits,next_cursor} for search;
       {shown,total,sessions,next_cursor} for --sessions;
-      {harness,project,cwd,date,resume_cmd,start,end,session_total,hit_index,messages,next_cursor} for show.
+      {harness,project,topic,cwd,date,resume_cmd,start,end,session_total,hit_index,messages,next_cursor} for show.
       Hit fields: ref,harness,project,age,role,snippet.
-      Session fields: ref,harness,project,age,hits,roles{you,asst,tool},best_ref,best.
+      Session fields: ref,harness,project,age,hits,roles{you,asst,tool},best_ref,best,topic.
       Show start,end,hit_index are zero-based like refs; session_total is a count.
       Show message fields: time,role,text,hit,full (when --full).
 Environment: KIOKU_INDEX, KIOKU_CLAUDE_DIR, KIOKU_CODEX_DIR,

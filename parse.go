@@ -29,6 +29,15 @@ func str(v any) string         { s, _ := v.(string); return s }
 func obj(v any) map[string]any { m, _ := v.(map[string]any); return m }
 func arr(v any) []any          { a, _ := v.([]any); return a }
 func clean(s string) string    { return strings.TrimSpace(strings.ReplaceAll(s, "\x00", "")) }
+func injectedUserText(s string) bool {
+	s = strings.TrimSpace(s)
+	for _, prefix := range []string{"<environment_context>", "<system_reminder>", "<local-command-", "<command-", "<task-notification>"} {
+		if strings.HasPrefix(s, prefix) {
+			return true
+		}
+	}
+	return false
+}
 func first(s string) string {
 	s = clean(s)
 	if i := strings.IndexByte(s, '\n'); i >= 0 {
@@ -78,7 +87,7 @@ func parseFile(path, h string, offset, size int64, base session, startIdx int) (
 		if role == "tool" {
 			text = first(text)
 		}
-		if role == "user" && (strings.HasPrefix(text, "<environment_context>") || strings.HasPrefix(text, "<system_reminder>") || strings.HasPrefix(text, "<local-command-") || strings.HasPrefix(text, "<command-") || strings.HasPrefix(text, "<task-notification>")) {
+		if role == "user" && injectedUserText(text) {
 			return
 		}
 		if text == "" {

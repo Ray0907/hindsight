@@ -123,6 +123,7 @@ type compactSession struct {
 	Roles   roleCounts `json:"roles"`
 	BestRef string     `json:"best_ref"`
 	Best    string     `json:"best"`
+	Topic   string     `json:"topic"`
 }
 type sessionPage struct {
 	Shown      int              `json:"shown"`
@@ -159,7 +160,7 @@ func renderSessions(p sessionPage, asJSON bool) error {
 	}
 	fmt.Fprintf(output, "%d/%d sessions\n", p.Shown, p.Total)
 	for _, s := range p.Sessions {
-		fmt.Fprintf(output, "%s  %s %s %s  %d hits (you %d · asst %d · tool %d)  best %s: %s\n", s.Ref, s.Harness, s.Project, s.Age, s.Hits, s.Roles.You, s.Roles.Asst, s.Roles.Tool, s.BestRef, s.Best)
+		fmt.Fprintf(output, "%s  %s %s %s  %d hits (you %d · asst %d · tool %d)  best %s: %s\n    topic: %s\n", s.Ref, s.Harness, s.Project, s.Age, s.Hits, s.Roles.You, s.Roles.Asst, s.Roles.Tool, s.BestRef, s.Best, s.Topic)
 	}
 	if p.NextCursor != "" {
 		fmt.Fprintln(output, "cursor: "+p.NextCursor)
@@ -321,6 +322,28 @@ func compactSearch(ctx context.Context, db *sql.DB, k pageKey, offset int) (hitP
 	return p, nil
 }
 
+func sessionTopic(ctx context.Context, db *sql.DB, uid string) (string, error) {
+	rows, err := db.QueryContext(ctx, `SELECT text FROM messages WHERE session_uid=? AND role='user' ORDER BY idx`, uid)
+	if err != nil {
+		return "", err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var text string
+		if err = rows.Scan(&text); err != nil {
+			return "", err
+		}
+		if injectedUserText(text) {
+			continue
+		}
+		text = strings.Join(strings.Fields(displayInline(text)), " ")
+		if text != "" {
+			return clip(text, 70), nil
+		}
+	}
+	return "(no user message)", rows.Err()
+}
+
 func compactSessions(ctx context.Context, db *sql.DB, k pageKey, offset int) (sessionPage, error) {
 	q, harness, limit := k.Query, k.Harness, k.Limit
 	p := sessionPage{Sessions: []compactSession{}}
@@ -380,7 +403,12 @@ func compactSessions(ctx context.Context, db *sql.DB, k pageKey, offset int) (se
 			if e = rows.Scan(&id, &harness, &project, &ts, &text, &hits, &idx, &roles.You, &roles.Asst, &roles.Tool); e != nil {
 				break
 			}
-			p.Sessions = append(p.Sessions, compactSession{Ref: shortID(id), Harness: harness, Project: displayInline(project), Age: age(ts), Hits: hits, Roles: roles, BestRef: shortID(id) + ":" + strconv.Itoa(idx), Best: compactSnippet(text, q)})
+			topic, topicErr := sessionTopic(ctx, db, id)
+			if topicErr != nil {
+				e = topicErr
+				break
+			}
+			p.Sessions = append(p.Sessions, compactSession{Ref: shortID(id), Harness: harness, Project: displayInline(project), Age: age(ts), Hits: hits, Roles: roles, BestRef: shortID(id) + ":" + strconv.Itoa(idx), Best: compactSnippet(text, q), Topic: topic})
 		}
 		if e == nil {
 			e = rows.Err()
@@ -445,6 +473,7 @@ type showMessage struct {
 type showPage struct {
 	Harness      string        `json:"harness"`
 	Project      string        `json:"project"`
+	Topic        string        `json:"topic"`
 	CWD          string        `json:"cwd"`
 	Date         string        `json:"date"`
 	ResumeCmd    string        `json:"resume_cmd"`
@@ -462,7 +491,7 @@ func renderShow(p showPage, asJSON bool) error {
 	if asJSON {
 		return writeJSON(p)
 	}
-	fmt.Fprintf(output, "%s · %s · %s · %s\nresume: %s\nmessages %d–%d of %d", p.Harness, p.Project, p.CWD, p.Date, displayInline(p.ResumeCmd), p.Start, p.End, p.SessionTotal)
+	fmt.Fprintf(output, "%s · %s · %s · %s\nresume: %s\ntopic: %s\nmessages %d–%d of %d", p.Harness, p.Project, p.CWD, p.Date, displayInline(p.ResumeCmd), p.Topic, p.Start, p.End, p.SessionTotal)
 	if p.HitIndex != nil {
 		fmt.Fprintf(output, " · hit %d", *p.HitIndex)
 	}
@@ -547,6 +576,10 @@ func compactShow(ctx context.Context, db *sql.DB, k pageKey, offset int) (showPa
 		return p, e
 	}
 	p.Project, p.CWD = displayInline(p.Project), displayInline(p.CWD)
+	p.Topic, e = sessionTopic(ctx, db, uid)
+	if e != nil {
+		return p, e
+	}
 	var count int
 	if e = db.QueryRowContext(ctx, `SELECT count(*) FROM messages WHERE session_uid=?`, uid).Scan(&count); e != nil {
 		return p, e
