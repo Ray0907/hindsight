@@ -271,7 +271,7 @@ func newestMatches(ctx context.Context, db *sql.DB, match, harness string, tool 
 	}
 }
 
-func search(ctx context.Context, db *sql.DB, q, harness string) ([]hit, error) {
+func search(ctx context.Context, db *sql.DB, q, harness string, limit int) ([]hit, error) {
 	match := toFTS(q)
 	started := time.Now()
 	var sqlq string
@@ -306,14 +306,15 @@ func search(ctx context.Context, db *sql.DB, q, harness string) ([]hit, error) {
 			sqlq += `AND s.harness=? `
 			args = append(args, harness)
 		}
-		sqlq += `ORDER BY m.ts DESC,m.id DESC LIMIT 300`
+		sqlq += `ORDER BY m.ts DESC,m.id DESC LIMIT ?`
+		args = append(args, limit)
 	} else if common {
-		ids, e := newestMatches(ctx, db, match, harness, false, 300)
+		ids, e := newestMatches(ctx, db, match, harness, false, limit)
 		if e != nil {
 			return nil, e
 		}
-		if len(ids) < 300 {
-			tools, err := newestMatches(ctx, db, match, harness, true, 300-len(ids))
+		if len(ids) < limit {
+			tools, err := newestMatches(ctx, db, match, harness, true, limit-len(ids))
 			if err != nil {
 				return nil, err
 			}
@@ -354,9 +355,9 @@ func search(ctx context.Context, db *sql.DB, q, harness string) ([]hit, error) {
 		query := func(role string) string {
 			return sqlq + `AND m.role` + role + ` ORDER BY score,m.ts DESC,m.id DESC LIMIT ?) SELECT s.uid,s.harness,s.native_id,s.project,s.cwd,s.path,m.id,m.idx,m.ts,m.role,m.text FROM ranked r JOIN messages m ON m.id=r.id JOIN sessions s ON s.uid=m.session_uid ORDER BY r.score,r.ts DESC,r.id DESC`
 		}
-		e = fetch(query(`!='tool'`), append(args, 300)...)
-		if e == nil && len(out) < 300 {
-			e = fetch(query(`='tool'`), append(args, 300-len(out))...)
+		e = fetch(query(`!='tool'`), append(args, limit)...)
+		if e == nil && len(out) < limit {
+			e = fetch(query(`='tool'`), append(args, limit-len(out))...)
 		}
 	} else {
 		e = fetch(sqlq, args...)

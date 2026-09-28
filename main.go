@@ -20,6 +20,30 @@ var version = "dev"
 
 var output io.Writer = os.Stdout
 
+const usage = `Usage:
+  kioku [flags] [query]       Search (TUI on a terminal, JSON Lines otherwise)
+  kioku index [--rebuild]     Sync sources and print counts
+  kioku help                 Show this help
+
+Flags:
+  --json                     Print JSON Lines
+  --limit N                  Maximum results (default 300; JSON and TUI)
+  --harness all|claude|codex|pi  Filter by agent (default all)
+  --rebuild                  Replace index (with index command)
+  --no-mouse                 Disable TUI mouse input
+  --version                  Print version
+  --help, -h                 Show this help
+
+Query: space means AND; "black tea" is a phrase; -word excludes;
+       bare words are prefixes. Use -- to search flag-like text:
+       kioku -- --help  (or kioku '"help"' for the word help).
+JSON fields: harness, session_id, project, cwd, ts, role, text,
+             snippet, resume_cmd, path.
+Environment: KIOKU_INDEX, KIOKU_CLAUDE_DIR, KIOKU_CODEX_DIR,
+             KIOKU_PI_DIR, KIOKU_EDITOR, KIOKU_THEME=light|dark,
+             KIOKU_DEBUG_TIMING=1; HOME, XDG_CACHE_HOME, VISUAL.
+`
+
 func main() {
 	if e := run(); e != nil {
 		fmt.Fprintln(os.Stderr, "kioku:", e)
@@ -34,6 +58,10 @@ func timing(label string, started time.Time) {
 func run() error {
 	started := time.Now()
 	args := os.Args[1:]
+	if len(args) > 0 && args[0] == "help" {
+		fmt.Fprint(output, usage)
+		return nil
+	}
 	index := len(args) > 0 && args[0] == "index"
 	if index {
 		args = args[1:]
@@ -42,6 +70,7 @@ func run() error {
 	fs.SetOutput(os.Stderr)
 	rebuild := fs.Bool("rebuild", false, "rebuild index")
 	jsonFlag := fs.Bool("json", false, "print JSON lines")
+	limit := fs.Int("limit", 300, "maximum results")
 	noMouse := fs.Bool("no-mouse", false, "disable mouse")
 	harness := fs.String("harness", "all", "all, claude, codex or pi")
 	ver := fs.Bool("version", false, "print version")
@@ -49,6 +78,30 @@ func run() error {
 	var words []string
 	for i := 0; i < len(args); i++ {
 		a := args[i]
+		if a == "--" {
+			words = append(words, args[i+1:]...)
+			break
+		}
+		if a == "--help" || a == "-h" {
+			fmt.Fprint(output, usage)
+			return nil
+		}
+		if a == "--limit" {
+			if i+1 == len(args) {
+				return fmt.Errorf("--limit requires a number")
+			}
+			if e := fs.Parse(args[i : i+2]); e != nil {
+				return e
+			}
+			i++
+			continue
+		}
+		if strings.HasPrefix(a, "--limit=") {
+			if e := fs.Parse([]string{a}); e != nil {
+				return e
+			}
+			continue
+		}
 		if a == "--harness" && i+1 < len(args) {
 			*harness = args[i+1]
 			i++
@@ -70,6 +123,9 @@ func run() error {
 	if *ver {
 		fmt.Fprintln(output, version)
 		return nil
+	}
+	if *limit < 1 {
+		return fmt.Errorf("--limit must be a positive integer")
 	}
 	if *harness != "all" && *harness != "claude" && *harness != "codex" && *harness != "pi" {
 		return fmt.Errorf("invalid harness %q", *harness)
@@ -101,7 +157,7 @@ func run() error {
 		if e != nil {
 			return e
 		}
-		rows, e := search(context.Background(), db, q, *harness)
+		rows, e := search(context.Background(), db, q, *harness, *limit)
 		if e != nil {
 			return e
 		}
@@ -110,11 +166,11 @@ func run() error {
 		timing("render", renderStart)
 		return e
 	}
-	rows, e := search(context.Background(), db, q, *harness)
+	rows, e := search(context.Background(), db, q, *harness, *limit)
 	if e != nil {
 		return e
 	}
-	m := newModel(db, q, *harness, rows, !*noMouse)
+	m := newModel(db, q, *harness, rows, !*noMouse, *limit)
 	options := []tea.ProgramOption{tea.WithAltScreen()}
 	if !*noMouse {
 		options = append(options, tea.WithMouseCellMotion())
