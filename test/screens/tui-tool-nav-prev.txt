@@ -1,7 +1,7 @@
 kioku ▸ toolprobeonly                                                                            1 messages · 1 sessions
 highlights none · press h in results to add
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-›▌ Bash · toolprobeonly output from helper                                                   claude  demo            16h
+›▌ Bash · toolprobeonly output from helper                                                   claude  demo            21h
 
 
 

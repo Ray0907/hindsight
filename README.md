@@ -106,6 +106,19 @@ Editor resolution: `KIOKU_EDITOR`, then `VISUAL`, then the first available `zed`
 
 Search tokenization uses [fts5-cjk](https://github.com/Ray0907/fts5-cjk), statically linked under its original license in `internal/cjk/`.
 
+## Agent skill
+
+`skills/kioku/SKILL.md` teaches coding agents to reach for kioku whenever you mention earlier work ("last time we…", "where did I…", 之前、上次). With it, they search wide to narrow instead of grepping raw transcripts: `--sessions`, then hits, then `show`, paging with `--cursor`. Install it once:
+
+```sh
+git clone https://github.com/Ray0907/kioku && cd kioku
+mkdir -p ~/.claude/skills/kioku ~/.agents/skills/kioku
+cp skills/kioku/SKILL.md ~/.claude/skills/kioku/   # Claude Code
+cp skills/kioku/SKILL.md ~/.agents/skills/kioku/   # Codex, Pi and other agents that read ~/.agents/skills
+```
+
+The `kioku` binary must be on your `PATH`.
+
 ## License
 
 MIT. Bundles [fts5-cjk](https://github.com/Ray0907/fts5-cjk) (MIT) and SQLite headers (public domain).

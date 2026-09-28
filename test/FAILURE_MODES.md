@@ -36,9 +36,13 @@ Use a fresh synthetic `HOME` from `./test/fixture.sh` for every run. Run all com
 
 ## CLI and resume behavior
 
+- [ ] Compact search pages default to 10 rows; cursor traversal has no skips/duplicates and agrees with a single `--limit 500` result; cursors reject a changed query or flags; text `cursor:` and JSON `next_cursor` appear only when another page exists and remain bound to their output mode.
+- [ ] `--sessions` ranking follows the best matching hit and per-session hit counts sum to the message-level result total.
+- [ ] `show <ref>` marks the selected hit, returns requested context, includes a usable resume command, and truncates long text; `show --all` cursor pages cover the whole session without duplication.
+- [ ] `--help` exits successfully with usage before opening or searching the index.
 - [ ] `kioku` opens the TUI; `kioku <query...>` pre-fills the query; `--no-mouse`, `--harness`, and `--version` are accepted as documented.
-- [ ] `--json <query...>` and non-TTY stdout emit valid JSON Lines (one object per result) and exit without terminal escape codes or interactive prompts. Every object contains exactly usable values for fields `harness`, `session_id`, `project`, `cwd`, `ts`, `role`, `text`, `snippet`, `resume_cmd`, and `path`.
-- [ ] JSON mode handles zero results, CJK, quotes, multiple query args, and paths/text requiring JSON escaping; output order matches TUI/index query semantics.
+- [ ] `--json <query...>` emits one compact page object (`shown`, `total`, `total_sessions`, `hits`, optional `next_cursor`) and exits without terminal escapes or prompts; each hit exposes `ref`, `harness`, `project`, `age`, `role`, and `snippet`.
+- [ ] JSON mode handles zero results, CJK, quotes, multiple query args, and cursor paging with valid JSON; hit ordering matches text/TUI search semantics.
 - [ ] Resume action uses `claude --resume <sessionId>`, `codex resume <id>`, or `pi --session <file path>` as applicable, with the process cwd set to the session cwd.
 - [ ] Resume arguments are passed safely (no shell interpolation); launch failures are visible and do not leave the terminal in raw mode.
 - [ ] If session cwd disappeared, remain in TUI and report it rather than exiting into an invalid directory.
