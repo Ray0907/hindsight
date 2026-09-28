@@ -30,7 +30,7 @@ const usage = `Usage:
 Flags: --json (one JSON page), --limit N (default 10 for pages, 300 for TUI),
        --cursor TOKEN (next page), --harness all|claude|codex|pi,
        --context N (show: before/after, default 3), --query Q (center show hit),
-       --all (show: whole session),
+       --all (show: whole session), --full (show: untruncated hit),
        --no-mouse, --rebuild (index), --version, --help, -h.
 Query: space means AND; "black tea" is a phrase; -word excludes;
        bare words are prefixes. Use -- to search flag-like text:
@@ -39,8 +39,8 @@ JSON: {shown,total,total_sessions,hits,next_cursor} for search;
       {shown,total,sessions,next_cursor} for --sessions;
       {harness,project,cwd,date,resume_cmd,start,end,session_total,hit_index,messages,next_cursor} for show.
       Hit fields: ref,harness,project,age,role,snippet.
-      Session fields: ref,harness,project,age,hits,best_ref,best.
-      Show message fields: time,role,text,hit.
+      Session fields: ref,harness,project,age,hits,roles{you,asst,tool},best_ref,best.
+      Show message fields: time,role,text,hit,full (when --full).
 Environment: KIOKU_INDEX, KIOKU_CLAUDE_DIR, KIOKU_CODEX_DIR,
              KIOKU_PI_DIR, KIOKU_EDITOR, KIOKU_THEME=light|dark,
              KIOKU_DEBUG_TIMING=1; HOME, XDG_CACHE_HOME, VISUAL.
@@ -78,6 +78,7 @@ func run() error {
 	showQuery := fs.String("query", "", "locate the hit in show")
 	contextSize := fs.Int("context", 3, "messages before and after")
 	all := fs.Bool("all", false, "show full session")
+	full := fs.Bool("full", false, "show selected message without truncation")
 	sessions := fs.Bool("sessions", false, "group by session")
 	noMouse := fs.Bool("no-mouse", false, "disable mouse")
 	harness := fs.String("harness", "all", "all, claude, codex or pi")
@@ -120,7 +121,7 @@ func run() error {
 			continue
 		}
 		switch a {
-		case "--rebuild", "--json", "--no-mouse", "--version", "--sessions", "--all":
+		case "--rebuild", "--json", "--no-mouse", "--version", "--sessions", "--all", "--full":
 			if e := fs.Parse([]string{a}); e != nil {
 				return e
 			}
@@ -157,6 +158,9 @@ func run() error {
 	}
 	if !show && *all {
 		return fmt.Errorf("--all requires show")
+	}
+	if !show && *full {
+		return fmt.Errorf("--full requires show")
 	}
 	if !show && *showQuery != "" {
 		return fmt.Errorf("--query requires show")
@@ -199,7 +203,7 @@ func run() error {
 			mode = "show"
 			q = *showQuery
 		}
-		key := pageKey{Mode: mode, Query: q, Harness: *harness, Limit: *limit, Context: *contextSize, JSON: *jsonFlag, All: *all, NoMouse: *noMouse, Rebuild: *rebuild}
+		key := pageKey{Mode: mode, Query: q, Harness: *harness, Limit: *limit, Context: *contextSize, JSON: *jsonFlag, All: *all, Full: *full, NoMouse: *noMouse, Rebuild: *rebuild}
 		if show {
 			key.Ref = words[0]
 		}
