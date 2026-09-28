@@ -13,13 +13,20 @@ Output is paged (10 per page) so it never floods your context. Go wide to narrow
 
 ## Workflow
 
-1. **Which sessions?** `kioku --sessions <query>`: one line per session with hits by role, e.g. `4 hits (you 2 · asst 1 · tool 1)`, and its best ref. Sessions with `you`/`asst` hits are where it was *discussed*. Tool-only sessions usually just quote it (reviews, pasted diffs, logs), so skip them unless nothing else fits.
+0. **Already know the project?** From memory, the cwd, or the user: start with `-p <project>` on every command below. It is the fastest filter.
+1. **Which sessions?** `kioku --sessions <query>`: one line per session with hits by role, e.g. `4 hits (you 2 · asst 1 · tool 1)`, and its best ref. Under each session, `topic:` is its first user message, which tells you what the session was for. Judge decoys from `topic:` and the role counts without opening them. A security review, an implementation brief, or tool-only hits usually just quote the term, so skip them unless nothing else fits.
 2. **Which messages?** `kioku <query>`: one hit per line, each starting with a ref like `2c998a27ab4c:54`.
 3. **What was said?** Run the `expand:` command it prints (`kioku show <ref> --query "<q>"`). You get the messages around the hit, the hit marked `>` and trimmed around the match, plus cwd and the `resume:` command.
    - `--full`: the whole hit message, no truncation.
    - `--context N`: more surrounding messages.
    - `kioku show <session-id> --all`: page through the whole session.
-4. **More results?** Only if the answer isn't there yet, repeat the same command with `--cursor <token>` from the `cursor:` line. A cursor only works with the exact query and flags it came from.
+4. **Answer.** A normal lookup is one `--sessions` call and at most two `show` calls, then your reply. The reply has three parts:
+   - what was concluded, in 2–3 sentences;
+   - the session it came from (agent, project, date) and its `resume:` line;
+   - optionally, other matching sessions, taken straight from the `--sessions` output, each with its `resume:` command.
+5. **Still not answered after that?** Refine the query or use `--cursor`.
+
+**More results?** Only if the answer isn't there yet, repeat the same command with `--cursor <token>` from the `cursor:` line. A cursor only works with the exact query and flags it came from.
 
 Don't read the raw JSONL. `show --full` has everything.
 
@@ -51,6 +58,7 @@ Don't read the raw JSONL. `show --full` has everything.
 |---|---|
 | Grepping raw JSONL across three stores | `kioku --sessions` first |
 | Answering from the first hit | Check `--sessions`, then `show` it to confirm |
+| Opening every matching session, `--context 15` | One `--sessions`, two `show`, then answer |
 | Opening a session by id to find the hit | Pass the ref (`id:idx`) from `--sessions` or the hit list |
 | Asking for `--limit 300` "to be safe" | Page with `--cursor` only when needed |
 | One English query, nothing found | Add the other language and synonyms |
