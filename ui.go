@@ -35,6 +35,7 @@ type model struct {
 	db                               *sql.DB
 	q                                string
 	harness                          string
+	projects                         []string
 	rows                             []hit
 	messages                         []message
 	hitIndex                         map[int]bool
@@ -70,12 +71,12 @@ type syncMsg struct {
 }
 type debounce int
 
-func newModel(db *sql.DB, q, h string, rows []hit, mouse bool, limit int) model {
+func newModel(db *sql.DB, q, h string, projects []string, rows []hit, mouse bool, limit int) model {
 	p := light
 	if os.Getenv("KIOKU_THEME") == "dark" || os.Getenv("KIOKU_THEME") == "" && termenv.HasDarkBackground() {
 		p = dark
 	}
-	m := model{db: db, q: q, harness: h, rows: rows, mouse: mouse, limit: limit, pal: p, width: 80, height: 24, cursor: -1, focus: true}
+	m := model{db: db, q: q, harness: h, projects: projects, rows: rows, mouse: mouse, limit: limit, pal: p, width: 80, height: 24, cursor: -1, focus: true}
 	m.initial = m.requestLoad()
 	return m
 }
@@ -118,8 +119,8 @@ type syncEnvelope struct {
 	ch <-chan syncMsg
 }
 
-func queryCmd(ctx context.Context, db *sql.DB, q, h string, limit, rev int) tea.Cmd {
-	return func() tea.Msg { rows, e := search(ctx, db, q, h, limit); return resultMsg{rev, rows, e} }
+func queryCmd(ctx context.Context, db *sql.DB, q, h string, projects []string, limit, rev int) tea.Cmd {
+	return func() tea.Msg { rows, e := search(ctx, db, q, h, projects, limit); return resultMsg{rev, rows, e} }
 }
 func (m *model) requestQuery() tea.Cmd {
 	if m.cancel != nil {
@@ -133,7 +134,7 @@ func (m *model) requestQuery() tea.Cmd {
 	m.hitIndex = map[int]bool{}
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
-	return queryCmd(ctx, m.db, m.q, m.harness, m.limit, m.revision)
+	return queryCmd(ctx, m.db, m.q, m.harness, m.projects, m.limit, m.revision)
 }
 func (m *model) requestLoad() tea.Cmd {
 	if m.loadCancel != nil {

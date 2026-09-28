@@ -69,6 +69,7 @@ Search: space means AND; `"black tea"` is an exact phrase; `-word` excludes; bar
 
 ```sh
 kioku --limit 5 snapshot                  # short refs + snippets, at most 5 hits
+kioku -p kioku --limit 5 snapshot        # exact project basename, case-insensitive; repeat -p for more
 kioku --limit 5 --cursor TOKEN snapshot   # next page, same query and flags
 kioku --sessions --limit 5 snapshot       # conversation-bearing sessions first; per-role hit counts
 kioku show a1b2c3d4e5f6:12 --query "snapshot" --context 3  # center the hit, with surrounding messages

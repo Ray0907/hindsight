@@ -18,6 +18,7 @@ import (
 
 type pageKey struct {
 	Mode, Query, Harness, Ref         string
+	Projects                          []string
 	Limit, Context                    int
 	JSON, All, Full, NoMouse, Rebuild bool
 }
@@ -168,9 +169,9 @@ func renderSessions(p sessionPage, asJSON bool) error {
 }
 
 // The same FTS predicate (including the short-prefix date bound) feeds counts and pages.
-func matchSource(ctx context.Context, db *sql.DB, q, harness string) (string, []any, error) {
+func matchSource(ctx context.Context, db *sql.DB, q, harness string, projects, names []string) (string, []any, error) {
 	from := `FROM messages_fts JOIN messages m ON m.id=messages_fts.rowid `
-	if harness != "" && harness != "all" {
+	if harness != "" && harness != "all" || len(projects) > 0 {
 		from += `JOIN sessions s ON s.uid=m.session_uid `
 	}
 	from += `WHERE messages_fts MATCH ? `
@@ -189,6 +190,9 @@ func matchSource(ctx context.Context, db *sql.DB, q, harness string) (string, []
 		from += `AND s.harness=? `
 		args = append(args, harness)
 	}
+	clause, values := projectPredicate(projects, names)
+	from += clause
+	args = append(args, values...)
 	return from, args, nil
 }
 func fetchPageHits(ctx context.Context, db *sql.DB, query string, args ...any) ([]hit, error) {
@@ -213,6 +217,10 @@ const hitColumns = `s.uid,s.harness,s.native_id,s.project,s.cwd,s.path,m.id,m.id
 func compactSearch(ctx context.Context, db *sql.DB, k pageKey, offset int) (hitPage, error) {
 	q, harness, limit := k.Query, k.Harness, k.Limit
 	p := hitPage{Hits: []compactHit{}}
+	names, err := matchingProjects(ctx, db, k.Projects)
+	if err != nil {
+		return p, err
+	}
 	var matches []hit
 	if toFTS(q) == "" {
 		from := `FROM sessions s JOIN messages m ON s.uid=m.session_uid WHERE m.idx=(SELECT max(idx) FROM messages WHERE session_uid=s.uid) `
@@ -221,6 +229,9 @@ func compactSearch(ctx context.Context, db *sql.DB, k pageKey, offset int) (hitP
 			from += `AND s.harness=? `
 			args = append(args, harness)
 		}
+		clause, values := projectPredicate(k.Projects, names)
+		from += clause
+		args = append(args, values...)
 		if e := db.QueryRowContext(ctx, `SELECT count(*) `+from, args...).Scan(&p.Total); e != nil {
 			return p, e
 		}
@@ -236,7 +247,7 @@ func compactSearch(ctx context.Context, db *sql.DB, k pageKey, offset int) (hitP
 			}
 		}
 	} else {
-		from, args, e := matchSource(ctx, db, q, harness)
+		from, args, e := matchSource(ctx, db, q, harness, k.Projects, names)
 		if e != nil {
 			return p, e
 		}
@@ -258,7 +269,7 @@ func compactSearch(ctx context.Context, db *sql.DB, k pageKey, offset int) (hitP
 			if common {
 				ids := []int64{}
 				if offset < conversations {
-					found, err := newestMatches(ctx, db, toFTS(q), harness, false, min(conversations, offset+limit))
+					found, err := newestMatches(ctx, db, toFTS(q), harness, k.Projects, names, false, min(conversations, offset+limit))
 					if err != nil {
 						return p, err
 					}
@@ -266,7 +277,7 @@ func compactSearch(ctx context.Context, db *sql.DB, k pageKey, offset int) (hitP
 				}
 				if offset+limit > conversations && p.Total > conversations {
 					toolOffset := max(0, offset-conversations)
-					found, err := newestMatches(ctx, db, toFTS(q), harness, true, min(p.Total-conversations, offset+limit-conversations))
+					found, err := newestMatches(ctx, db, toFTS(q), harness, k.Projects, names, true, min(p.Total-conversations, offset+limit-conversations))
 					if err != nil {
 						return p, err
 					}
@@ -313,6 +324,10 @@ func compactSearch(ctx context.Context, db *sql.DB, k pageKey, offset int) (hitP
 func compactSessions(ctx context.Context, db *sql.DB, k pageKey, offset int) (sessionPage, error) {
 	q, harness, limit := k.Query, k.Harness, k.Limit
 	p := sessionPage{Sessions: []compactSession{}}
+	names, err := matchingProjects(ctx, db, k.Projects)
+	if err != nil {
+		return p, err
+	}
 	var query string
 	args := []any{}
 	if toFTS(q) == "" {
@@ -321,12 +336,15 @@ func compactSessions(ctx context.Context, db *sql.DB, k pageKey, offset int) (se
 			from += `AND s.harness=? `
 			args = append(args, harness)
 		}
+		clause, values := projectPredicate(k.Projects, names)
+		from += clause
+		args = append(args, values...)
 		if e := db.QueryRowContext(ctx, `SELECT count(*) `+from, args...).Scan(&p.Total); e != nil {
 			return p, e
 		}
 		query = `SELECT s.uid,s.harness,s.project,m.ts,m.text,1,m.idx,(m.role='user'),(m.role='asst'),(m.role='tool') ` + from + `ORDER BY (m.role='tool'),m.ts DESC,m.id DESC LIMIT ? OFFSET ?`
 	} else {
-		from, values, e := matchSource(ctx, db, q, harness)
+		from, values, e := matchSource(ctx, db, q, harness, k.Projects, names)
 		if e != nil {
 			return p, e
 		}

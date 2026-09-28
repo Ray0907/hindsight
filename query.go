@@ -159,26 +159,71 @@ func commonQuery(ctx context.Context, db *sql.DB, q, match string) (bool, error)
 	return matched*10 >= total*9, nil
 }
 
+func matchingProjects(ctx context.Context, db *sql.DB, filters []string) ([]string, error) {
+	if len(filters) == 0 {
+		return nil, nil
+	}
+	rows, e := db.QueryContext(ctx, `SELECT DISTINCT project FROM sessions`)
+	if e != nil {
+		return nil, e
+	}
+	defer rows.Close()
+	var names []string
+	for rows.Next() {
+		var name string
+		if e = rows.Scan(&name); e != nil {
+			return nil, e
+		}
+		for _, filter := range filters {
+			if strings.EqualFold(name, filter) {
+				names = append(names, name)
+				break
+			}
+		}
+	}
+	return names, rows.Err()
+}
+func projectPredicate(filters, names []string) (string, []any) {
+	if len(filters) == 0 {
+		return "", nil
+	}
+	if len(names) == 0 {
+		return `AND 0 `, nil
+	}
+	values := make([]any, len(names))
+	for i, name := range names {
+		values[i] = name
+	}
+	return `AND s.project IN (` + strings.TrimSuffix(strings.Repeat("?,", len(names)), ",") + `) `, values
+}
+
 // Pick by timestamp, then verify exactly against FTS in rowid ranges. Rowids
 // are only seeks into FTS, never a recency limit or a ranking signal.
-func newestMatches(ctx context.Context, db *sql.DB, match, harness string, tool bool, want int) ([]int64, error) {
+func newestMatches(ctx context.Context, db *sql.DB, match, harness string, projects, names []string, tool bool, want int) ([]int64, error) {
 	limit := 400
 	for {
 		// ponytail: the ts index scans past the other role; add partial role/ts indexes only if tool-heavy corpora make this slow.
 		query := `SELECT m.id FROM messages m INDEXED BY messages_ts `
 		args := []any{}
-		if harness != "" && harness != "all" {
-			query += `CROSS JOIN sessions s ON s.uid=m.session_uid WHERE s.harness=? AND `
-			args = append(args, harness)
+		if len(projects) > 0 {
+			query = `SELECT m.id FROM sessions s CROSS JOIN messages m INDEXED BY messages_session ON m.session_uid=s.uid WHERE `
+		} else if harness != "" && harness != "all" {
+			query += `CROSS JOIN sessions s ON s.uid=m.session_uid WHERE `
 		} else {
 			query += `WHERE `
+		}
+		if harness != "" && harness != "all" {
+			query += `s.harness=? AND `
+			args = append(args, harness)
 		}
 		if tool {
 			query += `m.role='tool' `
 		} else {
 			query += `m.role!='tool' `
 		}
-		query += `ORDER BY m.ts DESC,m.id DESC LIMIT ?`
+		clause, values := projectPredicate(projects, names)
+		query += clause + `ORDER BY m.ts DESC,m.id DESC LIMIT ?`
+		args = append(args, values...)
 		args = append(args, limit)
 		rows, e := db.QueryContext(ctx, query, args...)
 		if e != nil {
@@ -271,8 +316,12 @@ func newestMatches(ctx context.Context, db *sql.DB, match, harness string, tool 
 	}
 }
 
-func search(ctx context.Context, db *sql.DB, q, harness string, limit int) ([]hit, error) {
+func search(ctx context.Context, db *sql.DB, q, harness string, projects []string, limit int) ([]hit, error) {
 	match := toFTS(q)
+	names, err := matchingProjects(ctx, db, projects)
+	if err != nil {
+		return nil, err
+	}
 	started := time.Now()
 	var sqlq string
 	args := []any{}
@@ -306,15 +355,18 @@ func search(ctx context.Context, db *sql.DB, q, harness string, limit int) ([]hi
 			sqlq += `AND s.harness=? `
 			args = append(args, harness)
 		}
+		clause, values := projectPredicate(projects, names)
+		sqlq += clause
+		args = append(args, values...)
 		sqlq += `ORDER BY m.ts DESC,m.id DESC LIMIT ?`
 		args = append(args, limit)
 	} else if common {
-		ids, e := newestMatches(ctx, db, match, harness, false, limit)
+		ids, e := newestMatches(ctx, db, match, harness, projects, names, false, limit)
 		if e != nil {
 			return nil, e
 		}
 		if len(ids) < limit {
-			tools, err := newestMatches(ctx, db, match, harness, true, limit-len(ids))
+			tools, err := newestMatches(ctx, db, match, harness, projects, names, true, limit-len(ids))
 			if err != nil {
 				return nil, err
 			}
@@ -330,7 +382,7 @@ func search(ctx context.Context, db *sql.DB, q, harness string, limit int) ([]hi
 		}
 	} else {
 		sqlq = `WITH ranked AS MATERIALIZED (SELECT m.id,m.ts,bm25(messages_fts) score FROM messages_fts JOIN messages m ON m.id=messages_fts.rowid `
-		if harness != "" && harness != "all" {
+		if harness != "" && harness != "all" || len(projects) > 0 {
 			sqlq += `JOIN sessions s ON s.uid=m.session_uid `
 		}
 		sqlq += `WHERE messages_fts MATCH ? `
@@ -349,6 +401,9 @@ func search(ctx context.Context, db *sql.DB, q, harness string, limit int) ([]hi
 			sqlq += `AND s.harness=? `
 			args = append(args, harness)
 		}
+		clause, values := projectPredicate(projects, names)
+		sqlq += clause
+		args = append(args, values...)
 	}
 	var e error
 	if match != "" && !common {

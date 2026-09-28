@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -29,6 +30,7 @@ const usage = `Usage:
 
 Flags: --json (one JSON page), --limit N (default 10 for pages, 300 for TUI),
        --cursor TOKEN (next page), --harness all|claude|codex|pi,
+       --project NAME, -p NAME (repeatable; project basename, case-insensitive),
        --context N (show: before/after, default 3), --query Q (center show hit),
        --all (show: whole session), --full (show: untruncated hit),
        --no-mouse, --rebuild (index), --version, --help, -h.
@@ -58,6 +60,18 @@ func timing(label string, started time.Time) {
 		fmt.Fprintf(os.Stderr, "timing %s=%.2fms\n", label, float64(time.Since(started).Microseconds())/1000)
 	}
 }
+
+type projectFlags []string
+
+func (p *projectFlags) String() string { return strings.Join(*p, ",") }
+func (p *projectFlags) Set(name string) error {
+	if name == "" {
+		return fmt.Errorf("project name cannot be empty")
+	}
+	*p = append(*p, filepath.Base(name))
+	return nil
+}
+
 func run() error {
 	started := time.Now()
 	args := os.Args[1:]
@@ -83,6 +97,9 @@ func run() error {
 	sessions := fs.Bool("sessions", false, "group by session")
 	noMouse := fs.Bool("no-mouse", false, "disable mouse")
 	harness := fs.String("harness", "all", "all, claude, codex or pi")
+	var projects projectFlags
+	fs.Var(&projects, "project", "filter project basename (repeatable)")
+	fs.Var(&projects, "p", "filter project basename (repeatable)")
 	ver := fs.Bool("version", false, "print version")
 	// Flags may precede or follow the query.
 	var words []string
@@ -96,7 +113,7 @@ func run() error {
 			fmt.Fprint(output, usage)
 			return nil
 		}
-		if a == "--limit" || a == "--cursor" || a == "--context" || a == "--query" {
+		if a == "--limit" || a == "--cursor" || a == "--context" || a == "--query" || a == "--project" || a == "-p" {
 			if i+1 == len(args) {
 				return fmt.Errorf("%s requires a value", a)
 			}
@@ -106,7 +123,7 @@ func run() error {
 			i++
 			continue
 		}
-		if strings.HasPrefix(a, "--limit=") || strings.HasPrefix(a, "--cursor=") || strings.HasPrefix(a, "--context=") || strings.HasPrefix(a, "--query=") {
+		if strings.HasPrefix(a, "--limit=") || strings.HasPrefix(a, "--cursor=") || strings.HasPrefix(a, "--context=") || strings.HasPrefix(a, "--query=") || strings.HasPrefix(a, "--project=") || strings.HasPrefix(a, "-p=") {
 			if e := fs.Parse([]string{a}); e != nil {
 				return e
 			}
@@ -153,6 +170,9 @@ func run() error {
 	}
 	if *contextSize < 0 {
 		return fmt.Errorf("--context must be nonnegative")
+	}
+	if (show || index) && len(projects) > 0 {
+		return fmt.Errorf("--project applies to search and --sessions")
 	}
 	if show && (*sessions || len(words) != 1) {
 		return fmt.Errorf("show requires one reference (and cannot use --sessions)")
@@ -204,7 +224,7 @@ func run() error {
 			mode = "show"
 			q = *showQuery
 		}
-		key := pageKey{Mode: mode, Query: q, Harness: *harness, Limit: *limit, Context: *contextSize, JSON: *jsonFlag, All: *all, Full: *full, NoMouse: *noMouse, Rebuild: *rebuild}
+		key := pageKey{Mode: mode, Query: q, Harness: *harness, Projects: projects, Limit: *limit, Context: *contextSize, JSON: *jsonFlag, All: *all, Full: *full, NoMouse: *noMouse, Rebuild: *rebuild}
 		if show {
 			key.Ref = words[0]
 		}
@@ -234,11 +254,11 @@ func run() error {
 			return renderHits(page, *jsonFlag, q)
 		}
 	}
-	rows, e := search(context.Background(), db, q, *harness, *limit)
+	rows, e := search(context.Background(), db, q, *harness, projects, *limit)
 	if e != nil {
 		return e
 	}
-	m := newModel(db, q, *harness, rows, !*noMouse, *limit)
+	m := newModel(db, q, *harness, projects, rows, !*noMouse, *limit)
 	options := []tea.ProgramOption{tea.WithAltScreen()}
 	if !*noMouse {
 		options = append(options, tea.WithMouseCellMotion())
