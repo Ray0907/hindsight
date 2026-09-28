@@ -40,6 +40,7 @@ JSON: {shown,total,total_sessions,hits,next_cursor} for search;
       {harness,project,cwd,date,resume_cmd,start,end,session_total,hit_index,messages,next_cursor} for show.
       Hit fields: ref,harness,project,age,role,snippet.
       Session fields: ref,harness,project,age,hits,roles{you,asst,tool},best_ref,best.
+      Show start,end,hit_index are zero-based like refs; session_total is a count.
       Show message fields: time,role,text,hit,full (when --full).
 Environment: KIOKU_INDEX, KIOKU_CLAUDE_DIR, KIOKU_CODEX_DIR,
              KIOKU_PI_DIR, KIOKU_EDITOR, KIOKU_THEME=light|dark,

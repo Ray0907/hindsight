@@ -554,7 +554,7 @@ func compactShow(ctx context.Context, db *sql.DB, k pageKey, offset int) (showPa
 	p.Total = end - start
 	p.SessionTotal = count
 	if selected >= 0 && !k.All {
-		n := selected + 1
+		n := selected
 		p.HitIndex = &n
 	}
 	if offset > p.Total {
@@ -609,7 +609,7 @@ func compactShow(ctx context.Context, db *sql.DB, k pageKey, offset int) (showPa
 	}
 	p.Shown = len(p.Messages)
 	if p.Shown > 0 {
-		p.Start, p.End = start+offset+1, start+offset+p.Shown
+		p.Start, p.End = start+offset, start+offset+p.Shown-1
 	}
 	p.NextCursor = nextCursor(k, offset, p.Shown, p.Total)
 	return p, nil
