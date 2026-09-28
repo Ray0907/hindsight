@@ -29,16 +29,17 @@ const usage = `Usage:
 
 Flags: --json (one JSON page), --limit N (default 10 for pages, 300 for TUI),
        --cursor TOKEN (next page), --harness all|claude|codex|pi,
-       --context N (show: before/after, default 3), --all (show: whole session),
+       --context N (show: before/after, default 3), --query Q (center show hit),
+       --all (show: whole session),
        --no-mouse, --rebuild (index), --version, --help, -h.
 Query: space means AND; "black tea" is a phrase; -word excludes;
        bare words are prefixes. Use -- to search flag-like text:
        kioku -- --help (or kioku '"help"' for the word help).
-JSON: {shown,total,sessions,hits,next_cursor} for search;
+JSON: {shown,total,total_sessions,hits,next_cursor} for search;
       {shown,total,sessions,next_cursor} for --sessions;
-      {harness,project,cwd,date,resume_cmd,shown,total,messages,next_cursor} for show.
+      {harness,project,cwd,date,resume_cmd,start,end,session_total,hit_index,messages,next_cursor} for show.
       Hit fields: ref,harness,project,age,role,snippet.
-      Session fields: ref,harness,project,age,hits,best.
+      Session fields: ref,harness,project,age,hits,best_ref,best.
       Show message fields: time,role,text,hit.
 Environment: KIOKU_INDEX, KIOKU_CLAUDE_DIR, KIOKU_CODEX_DIR,
              KIOKU_PI_DIR, KIOKU_EDITOR, KIOKU_THEME=light|dark,
@@ -74,6 +75,7 @@ func run() error {
 	jsonFlag := fs.Bool("json", false, "print JSON lines")
 	limit := fs.Int("limit", 0, "maximum results")
 	cursor := fs.String("cursor", "", "next page token")
+	showQuery := fs.String("query", "", "locate the hit in show")
 	contextSize := fs.Int("context", 3, "messages before and after")
 	all := fs.Bool("all", false, "show full session")
 	sessions := fs.Bool("sessions", false, "group by session")
@@ -92,7 +94,7 @@ func run() error {
 			fmt.Fprint(output, usage)
 			return nil
 		}
-		if a == "--limit" || a == "--cursor" || a == "--context" {
+		if a == "--limit" || a == "--cursor" || a == "--context" || a == "--query" {
 			if i+1 == len(args) {
 				return fmt.Errorf("%s requires a value", a)
 			}
@@ -102,7 +104,7 @@ func run() error {
 			i++
 			continue
 		}
-		if strings.HasPrefix(a, "--limit=") || strings.HasPrefix(a, "--cursor=") || strings.HasPrefix(a, "--context=") {
+		if strings.HasPrefix(a, "--limit=") || strings.HasPrefix(a, "--cursor=") || strings.HasPrefix(a, "--context=") || strings.HasPrefix(a, "--query=") {
 			if e := fs.Parse([]string{a}); e != nil {
 				return e
 			}
@@ -156,6 +158,9 @@ func run() error {
 	if !show && *all {
 		return fmt.Errorf("--all requires show")
 	}
+	if !show && *showQuery != "" {
+		return fmt.Errorf("--query requires show")
+	}
 	if *harness != "all" && *harness != "claude" && *harness != "codex" && *harness != "pi" {
 		return fmt.Errorf("invalid harness %q", *harness)
 	}
@@ -192,7 +197,7 @@ func run() error {
 		}
 		if show {
 			mode = "show"
-			q = ""
+			q = *showQuery
 		}
 		key := pageKey{Mode: mode, Query: q, Harness: *harness, Limit: *limit, Context: *contextSize, JSON: *jsonFlag, All: *all, NoMouse: *noMouse, Rebuild: *rebuild}
 		if show {
@@ -221,7 +226,7 @@ func run() error {
 			if err != nil {
 				return err
 			}
-			return renderHits(page, *jsonFlag)
+			return renderHits(page, *jsonFlag, q)
 		}
 	}
 	rows, e := search(context.Background(), db, q, *harness, *limit)

@@ -102,11 +102,11 @@ type compactHit struct {
 	Snippet string `json:"snippet"`
 }
 type hitPage struct {
-	Shown      int          `json:"shown"`
-	Total      int          `json:"total"`
-	Sessions   int          `json:"sessions"`
-	Hits       []compactHit `json:"hits"`
-	NextCursor string       `json:"next_cursor,omitempty"`
+	Shown         int          `json:"shown"`
+	Total         int          `json:"total"`
+	TotalSessions int          `json:"total_sessions"`
+	Hits          []compactHit `json:"hits"`
+	NextCursor    string       `json:"next_cursor,omitempty"`
 }
 type compactSession struct {
 	Ref     string `json:"ref"`
@@ -114,6 +114,7 @@ type compactSession struct {
 	Project string `json:"project"`
 	Age     string `json:"age"`
 	Hits    int    `json:"hits"`
+	BestRef string `json:"best_ref"`
 	Best    string `json:"best"`
 }
 type sessionPage struct {
@@ -123,18 +124,26 @@ type sessionPage struct {
 	NextCursor string           `json:"next_cursor,omitempty"`
 }
 
-func renderHits(p hitPage, asJSON bool) error {
+func shellQuote(s string) string {
+	if strings.ContainsAny(s, "$`\\\"!\n\r") {
+		return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
+	}
+	return strconv.Quote(s)
+}
+func renderHits(p hitPage, asJSON bool, q string) error {
 	if asJSON {
 		return writeJSON(p)
 	}
-	fmt.Fprintf(output, "%d/%d hits · %d sessions\n", p.Shown, p.Total, p.Sessions)
+	fmt.Fprintf(output, "%d/%d hits in %d sessions\n", p.Shown, p.Total, p.TotalSessions)
 	for _, h := range p.Hits {
 		fmt.Fprintf(output, "%s  %s %s %s  %s: %s\n", h.Ref, h.Harness, h.Project, h.Age, h.Role, h.Snippet)
 	}
 	if p.NextCursor != "" {
 		fmt.Fprintln(output, "cursor: "+p.NextCursor)
 	}
-	fmt.Fprintln(output, "expand: kioku show <ref>")
+	if len(p.Hits) > 0 {
+		fmt.Fprintf(output, "expand: kioku show %s --query %s\n", p.Hits[0].Ref, shellQuote(q))
+	}
 	return nil
 }
 func renderSessions(p sessionPage, asJSON bool) error {
@@ -143,7 +152,7 @@ func renderSessions(p sessionPage, asJSON bool) error {
 	}
 	fmt.Fprintf(output, "%d/%d sessions\n", p.Shown, p.Total)
 	for _, s := range p.Sessions {
-		fmt.Fprintf(output, "%s  %s %s %s  %d hits  best: %s\n", s.Ref, s.Harness, s.Project, s.Age, s.Hits, s.Best)
+		fmt.Fprintf(output, "%s  %s %s %s  %d hits  best %s: %s\n", s.Ref, s.Harness, s.Project, s.Age, s.Hits, s.BestRef, s.Best)
 	}
 	if p.NextCursor != "" {
 		fmt.Fprintln(output, "cursor: "+p.NextCursor)
@@ -209,6 +218,7 @@ func compactSearch(ctx context.Context, db *sql.DB, k pageKey, offset int) (hitP
 		if e := db.QueryRowContext(ctx, `SELECT count(*) `+from, args...).Scan(&p.Total); e != nil {
 			return p, e
 		}
+		p.TotalSessions = p.Total
 		if offset > p.Total {
 			return p, fmt.Errorf("cursor past end of results")
 		}
@@ -225,7 +235,7 @@ func compactSearch(ctx context.Context, db *sql.DB, k pageKey, offset int) (hitP
 			return p, e
 		}
 		var conversations int
-		if e = db.QueryRowContext(ctx, `SELECT count(*),coalesce(sum(m.role!='tool'),0) `+from, args...).Scan(&p.Total, &conversations); e != nil {
+		if e = db.QueryRowContext(ctx, `SELECT count(*),coalesce(sum(m.role!='tool'),0),count(DISTINCT m.session_uid) `+from, args...).Scan(&p.Total, &conversations, &p.TotalSessions); e != nil {
 			return p, e
 		}
 		if offset > p.Total {
@@ -286,12 +296,10 @@ func compactSearch(ctx context.Context, db *sql.DB, k pageKey, offset int) (hitP
 			}
 		}
 	}
-	sessions := map[string]bool{}
 	for _, h := range matches {
-		sessions[h.UID] = true
 		p.Hits = append(p.Hits, compactHit{shortID(h.UID) + ":" + strconv.Itoa(h.Index), h.Harness, displayInline(h.Project), age(h.TS), h.Role, compactSnippet(h.Text, q)})
 	}
-	p.Shown, p.Sessions = len(p.Hits), len(sessions)
+	p.Shown = len(p.Hits)
 	p.NextCursor = nextCursor(k, offset, p.Shown, p.Total)
 	return p, nil
 }
@@ -310,7 +318,7 @@ func compactSessions(ctx context.Context, db *sql.DB, k pageKey, offset int) (se
 		if e := db.QueryRowContext(ctx, `SELECT count(*) `+from, args...).Scan(&p.Total); e != nil {
 			return p, e
 		}
-		query = `SELECT s.uid,s.harness,s.project,m.ts,m.text,1 ` + from + `ORDER BY m.ts DESC,m.id DESC LIMIT ? OFFSET ?`
+		query = `SELECT s.uid,s.harness,s.project,m.ts,m.text,1,m.idx ` + from + `ORDER BY m.ts DESC,m.id DESC LIMIT ? OFFSET ?`
 	} else {
 		from, values, e := matchSource(ctx, db, q, harness)
 		if e != nil {
@@ -331,7 +339,7 @@ func compactSessions(ctx context.Context, db *sql.DB, k pageKey, offset int) (se
 		if common {
 			score = `0`
 		}
-		query = `WITH matched AS MATERIALIZED (SELECT m.id,m.session_uid,m.ts,m.role,` + score + ` score ` + from + `), ranked AS (SELECT id,session_uid,ts,role,score,count(*) OVER (PARTITION BY session_uid) hits,row_number() OVER (PARTITION BY session_uid ORDER BY (role='tool'),score,ts DESC,id DESC) rn FROM matched) SELECT s.uid,s.harness,s.project,m.ts,m.text,r.hits FROM ranked r JOIN messages m ON m.id=r.id JOIN sessions s ON s.uid=m.session_uid WHERE r.rn=1 ORDER BY (r.role='tool'),r.score,r.ts DESC,r.id DESC LIMIT ? OFFSET ?`
+		query = `WITH matched AS MATERIALIZED (SELECT m.id,m.session_uid,m.ts,m.role,` + score + ` score ` + from + `), ranked AS (SELECT id,session_uid,ts,role,score,count(*) OVER (PARTITION BY session_uid) hits,row_number() OVER (PARTITION BY session_uid ORDER BY (role='tool'),score,ts DESC,id DESC) rn FROM matched) SELECT s.uid,s.harness,s.project,m.ts,m.text,r.hits,m.idx FROM ranked r JOIN messages m ON m.id=r.id JOIN sessions s ON s.uid=m.session_uid WHERE r.rn=1 ORDER BY (r.role='tool'),r.score,r.ts DESC,r.id DESC LIMIT ? OFFSET ?`
 	}
 	if offset > p.Total {
 		return p, fmt.Errorf("cursor past end of results")
@@ -343,11 +351,11 @@ func compactSessions(ctx context.Context, db *sql.DB, k pageKey, offset int) (se
 		}
 		for rows.Next() {
 			var id, harness, project, ts, text string
-			var hits int
-			if e = rows.Scan(&id, &harness, &project, &ts, &text, &hits); e != nil {
+			var hits, idx int
+			if e = rows.Scan(&id, &harness, &project, &ts, &text, &hits, &idx); e != nil {
 				break
 			}
-			p.Sessions = append(p.Sessions, compactSession{Ref: shortID(id), Harness: harness, Project: displayInline(project), Age: age(ts), Hits: hits, Best: compactSnippet(text, q)})
+			p.Sessions = append(p.Sessions, compactSession{Ref: shortID(id), Harness: harness, Project: displayInline(project), Age: age(ts), Hits: hits, BestRef: shortID(id) + ":" + strconv.Itoa(idx), Best: compactSnippet(text, q)})
 		}
 		if e == nil {
 			e = rows.Err()
@@ -362,6 +370,46 @@ func compactSessions(ctx context.Context, db *sql.DB, k pageKey, offset int) (se
 	return p, nil
 }
 
+// Keep the first visible query match in the middle of the selected message.
+func showWindow(text, q string) string {
+	s := displayInline(text)
+	first := -1
+	var runes []rune
+	for _, t := range terms(q) {
+		if t.Negative {
+			continue
+		}
+		at := strings.Index(strings.ToLower(s), strings.ToLower(t.Word))
+		if at < 0 {
+			if runes == nil {
+				runes = []rune(s)
+			}
+			if found := positions(runes, t.Word); len(found) > 0 {
+				at = len(string(runes[:found[0]]))
+			}
+		}
+		if at >= 0 && at < len(s) && (first < 0 || at < first) {
+			first = at
+		}
+	}
+	if first < 0 {
+		return ansi.Truncate(s, 400, "…")
+	}
+	for first > 0 && !utf8.RuneStart(s[first]) {
+		first--
+	}
+	start := first
+	for cells := 0; start > 0 && cells < 160; {
+		r, size := utf8.DecodeLastRuneInString(s[:start])
+		start -= size
+		cells += displayWidth(string(r))
+	}
+	if start > 0 {
+		return ansi.Truncate("…"+s[start:], 400, "…")
+	}
+	return ansi.Truncate(s, 400, "…")
+}
+
 type showMessage struct {
 	Time string `json:"time"`
 	Role string `json:"role"`
@@ -369,22 +417,30 @@ type showMessage struct {
 	Hit  bool   `json:"hit"`
 }
 type showPage struct {
-	Harness    string        `json:"harness"`
-	Project    string        `json:"project"`
-	CWD        string        `json:"cwd"`
-	Date       string        `json:"date"`
-	ResumeCmd  string        `json:"resume_cmd"`
-	Shown      int           `json:"shown"`
-	Total      int           `json:"total"`
-	Messages   []showMessage `json:"messages"`
-	NextCursor string        `json:"next_cursor,omitempty"`
+	Harness      string        `json:"harness"`
+	Project      string        `json:"project"`
+	CWD          string        `json:"cwd"`
+	Date         string        `json:"date"`
+	ResumeCmd    string        `json:"resume_cmd"`
+	Shown        int           `json:"shown"`
+	Total        int           `json:"total"`
+	Start        int           `json:"start"`
+	End          int           `json:"end"`
+	SessionTotal int           `json:"session_total"`
+	HitIndex     *int          `json:"hit_index,omitempty"`
+	Messages     []showMessage `json:"messages"`
+	NextCursor   string        `json:"next_cursor,omitempty"`
 }
 
 func renderShow(p showPage, asJSON bool) error {
 	if asJSON {
 		return writeJSON(p)
 	}
-	fmt.Fprintf(output, "%s · %s · %s · %s\nresume: %s\n%d/%d messages\n", p.Harness, p.Project, p.CWD, p.Date, displayInline(p.ResumeCmd), p.Shown, p.Total)
+	fmt.Fprintf(output, "%s · %s · %s · %s\nresume: %s\nmessages %d–%d of %d", p.Harness, p.Project, p.CWD, p.Date, displayInline(p.ResumeCmd), p.Start, p.End, p.SessionTotal)
+	if p.HitIndex != nil {
+		fmt.Fprintf(output, " · hit %d", *p.HitIndex)
+	}
+	fmt.Fprintln(output)
 	for _, m := range p.Messages {
 		mark := " "
 		if m.Hit {
@@ -477,6 +533,11 @@ func compactShow(ctx context.Context, db *sql.DB, k pageKey, offset int) (showPa
 		}
 	}
 	p.Total = end - start
+	p.SessionTotal = count
+	if selected >= 0 && !k.All {
+		n := selected + 1
+		p.HitIndex = &n
+	}
 	if offset > p.Total {
 		return p, fmt.Errorf("cursor past end of session")
 	}
@@ -507,7 +568,13 @@ func compactShow(ctx context.Context, db *sql.DB, k pageKey, offset int) (showPa
 			if t, parseErr := time.Parse(time.RFC3339Nano, ts); parseErr == nil {
 				hm = t.Format("15:04")
 			}
-			p.Messages = append(p.Messages, showMessage{hm, role, ansi.Truncate(displayInline(text), 400, "…"), idx == selected})
+			var visible string
+			if idx == selected && k.Query != "" {
+				visible = showWindow(text, k.Query)
+			} else {
+				visible = ansi.Truncate(displayInline(text), 400, "…")
+			}
+			p.Messages = append(p.Messages, showMessage{hm, role, visible, idx == selected})
 		}
 		if err == nil {
 			err = msgs.Err()
@@ -518,6 +585,9 @@ func compactShow(ctx context.Context, db *sql.DB, k pageKey, offset int) (showPa
 		}
 	}
 	p.Shown = len(p.Messages)
+	if p.Shown > 0 {
+		p.Start, p.End = start+offset+1, start+offset+p.Shown
+	}
 	p.NextCursor = nextCursor(k, offset, p.Shown, p.Total)
 	return p, nil
 }

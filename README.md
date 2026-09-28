@@ -71,12 +71,12 @@ Search: space means AND; `"black tea"` is an exact phrase; `-word` excludes; bar
 kioku --limit 5 snapshot                  # short refs + snippets, at most 5 hits
 kioku --limit 5 --cursor TOKEN snapshot   # next page, same query and flags
 kioku --sessions --limit 5 snapshot       # sessions ranked by their best hit
-kioku show a1b2c3d4e5f6:12 --context 3   # three messages either side of the hit
+kioku show a1b2c3d4e5f6:12 --query "snapshot" --context 3  # center the hit, with surrounding messages
 kioku show a1b2c3d4e5f6 --context 0 --all    # walk the entire session, 10 messages/page
 kioku --json --limit 5 snapshot          # one JSON object with hits and next_cursor
 ```
 
-Replace the example ref and token with values from your output. Refs are stable short hashes of the source-qualified session ID plus the message index; `show` also accepts an unambiguous native session ID. Search snippets use at most 160 display cells; `show` text uses at most 400. The hit header counts distinct sessions **on that page**. A `cursor:` footer (or JSON `next_cursor`) appears only when more results exist; reuse it with the same mode, query, and flags. `show --all` starts at the first message and pages through the full session. JSON mirrors the text fields without full transcripts; use `show` to expand a result. Cursors use offsets against the current index, so a simultaneous reindex can shift later pages.
+Replace the example ref and token with values from your output. Refs are stable short hashes of the source-qualified session ID plus the message index; `show` also accepts an unambiguous native session ID. Search snippets use at most 160 display cells; `show` text uses at most 400. The hit header and JSON `total_sessions` count distinct sessions across **all** matches. The copyable `expand:` command passes the search query to `show`, which centers the marked message around its first visible match; without `--query`, `show` starts at the beginning of the text. Session results include a directly showable `best_ref` (also in JSON). Show headers use 1-based message positions within the session and identify the selected hit. A `cursor:` footer (or JSON `next_cursor`) appears only when more results exist; reuse it with the same mode, query, and flags. `show --all` starts at the first message and pages through the full session. JSON mirrors the text fields without full transcripts; use `show` to expand a result. Cursors use offsets against the current index, so a simultaneous reindex can shift later pages.
 
 | Key | Action |
 | --- | --- |
