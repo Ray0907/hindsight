@@ -1,19 +1,19 @@
 #!/bin/bash
 set -uo pipefail
-ROOT=$(cd "$(dirname "$0")/.." && pwd); TEST="$ROOT/test"; BIN="$ROOT/hindsight"; REALHOME_DEFAULT=$HOME
+ROOT=$(cd "$(dirname "$0")/.." && pwd); TEST="$ROOT/test"; BIN="$ROOT/kioku"; REALHOME_DEFAULT=$HOME
 REPORT="$TEST/e2e-report.md"; SCREENS="$TEST/screens"; mkdir -p "$SCREENS"
 printf '# E2E report\n\nRun: %s\n\n| Check | Result | Time | Details |\n|---|---:|---:|---|\n' "$(date -u '+%Y-%m-%d %H:%M:%S UTC')" > "$REPORT"
 PASS=0; FAIL=0
 : > "$TEST/BUGS.md"
 record(){ local name=$1 res=$2 sec=$3 detail=${4:-} expected='check passes per test/FAILURE_MODES.md' repro='test/e2e.sh'; detail=${detail//|/\\|}; detail=${detail//$'\n'/ }; printf '| %s | %s | %ss | %s |\n' "$name" "$res" "$sec" "$detail" >> "$REPORT"; if [[ $res == PASS ]]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); if [[ $name == Performance:* ]]; then expected='p95 over 20 varied query latencies is <= 200ms'; repro='test/e2e.sh (200k-message fixture)'; fi; if [[ $name == Hit-list* ]]; then expected='each clipped hit snippet ends with ellipsis and no Latin word is cut'; fi; if [[ $name == Search\ semantics:* ]]; then expected='common-word results include the newest Claude message and results outside the last-indexed Pi file'; fi; failbug "$name" "$repro" "$expected" "$detail"; fi; }
 skip(){ printf '| %s | SKIP | 0s | %s |\n' "$1" "$2" >> "$REPORT"; }
-TMP=$(mktemp -d "${TMPDIR:-/tmp}/hindsight-e2e.XXXXXX")
+TMP=$(mktemp -d "${TMPDIR:-/tmp}/kioku-e2e.XXXXXX")
 cleanup(){ tmux kill-session -t "htool-$$" 2>/dev/null || :; tmux kill-session -t "htrunc-$$" 2>/dev/null || :; tmux kill-session -t "he2e-$$" 2>/dev/null || :; tmux kill-session -t "hrsm-$$" 2>/dev/null || :; tmux kill-session -t "hrsm-codex-$$" 2>/dev/null || :; tmux kill-session -t "hrsm-pi-$$" 2>/dev/null || :; tmux kill-session -t "hedt-$$" 2>/dev/null || :; rm -rf "$TMP"; }
 trap cleanup EXIT
 failbug(){ printf '\n- **%s**\n  - Repro: `%s`\n  - Expected: %s\n  - Actual: %s\n' "$1" "$2" "$3" "$4" >> "$TEST/BUGS.md"; }
 
 # Build phase
-start=$SECONDS; (cd "$ROOT" && make build) >"$SCREENS/build.txt" 2>&1; rc=$?; if ((rc==0)); then record 'make build (sqlite_fts5)' PASS $((SECONDS-start)) 'built ./hindsight'; else record 'make build (sqlite_fts5)' FAIL $((SECONDS-start)) "$(<"$SCREENS/build.txt")"; fi
+start=$SECONDS; (cd "$ROOT" && make build) >"$SCREENS/build.txt" 2>&1; rc=$?; if ((rc==0)); then record 'make build (sqlite_fts5)' PASS $((SECONDS-start)) 'built ./kioku'; else record 'make build (sqlite_fts5)' FAIL $((SECONDS-start)) "$(<"$SCREENS/build.txt")"; fi
 
 H="$TMP/home"; "$TEST/fixture.sh" "$H" >/dev/null || exit 1
 mkdir -p "$H/work/demo" "$H/index"
@@ -23,7 +23,7 @@ h=pathlib.Path(sys.argv[1])
 for p in h.rglob('*.jsonl'):
  p.write_text(p.read_text().replace('/work/demo',str(h/'work/demo')))
 PY
-export HOME="$H" HINDSIGHT_INDEX="$H/index/index.db" HINDSIGHT_THEME=light TERM=xterm-256color
+export HOME="$H" KIOKU_INDEX="$H/index/index.db" KIOKU_THEME=light TERM=xterm-256color
 
 start=$SECONDS; out=$("$BIN" index --rebuild 2>&1); rc=$?
 if ((rc==0)) && grep -q 'claude: 5 messages' <<<"$out" && grep -q 'codex: 5 messages' <<<"$out" && grep -q 'pi: 5 messages' <<<"$out" && grep -q '3 files, 3 changed, 0 skipped' <<<"$out"; then record 'Index Claude/Codex/Pi real-format fixtures' PASS $((SECONDS-start)) "$out"; else record 'Index Claude/Codex/Pi real-format fixtures' FAIL $((SECONDS-start)) "$out"; fi
@@ -72,7 +72,7 @@ tool_only=$("$BIN" --json toolprobeonly 2>&1); if grep -q '"role":"tool"' <<<"$t
 # Query correctness cases from SPEC's Expected behavior plus languages/filters.
 check_query(){ local q=$1 mode=$2 want=${3:-}; local t=$SECONDS out rc; out=$("$BIN" --json "$q" 2>&1); rc=$?; local ok=1
  if ((rc)); then ok=0; elif [[ $mode == empty ]]; then [[ -z $out ]] || ok=0; elif ! grep -Fq "$want" <<<"$out"; then ok=0; fi
- if ((ok)); then record "query: $q ($mode)" PASS $((SECONDS-t)) ''; else record "query: $q ($mode)" FAIL $((SECONDS-t)) "expected $mode $want; got: $out"; failbug "Query $q" "HOME=$HOME HINDSIGHT_INDEX=$HINDSIGHT_INDEX ./hindsight --json '$q'" "${mode} ${want}" "$out"; fi
+ if ((ok)); then record "query: $q ($mode)" PASS $((SECONDS-t)) ''; else record "query: $q ($mode)" FAIL $((SECONDS-t)) "expected $mode $want; got: $out"; failbug "Query $q" "HOME=$HOME KIOKU_INDEX=$KIOKU_INDEX ./kioku --json '$q'" "${mode} ${want}" "$out"; fi
 }
 check_query snapshot contains SNAPSHOT
 check_query recoverytoken contains recoverytoken
@@ -108,8 +108,8 @@ with open(pi,'a') as f: f.write(json.dumps({'type':'message','id':'33333333-3333
 PY
 # Real TUI via tmux. Plain and escape-preserving captures are retained for inspection.
 tmux set-option -g remain-on-exit on 2>/dev/null || :
-export HINDSIGHT_INDEX="$H/index/tui.db"
-tmux new-session -d -x 120 -y 40 -s "he2e-$$" "cd '$ROOT' && HOME='$HOME' HINDSIGHT_INDEX='$HINDSIGHT_INDEX' HINDSIGHT_THEME=light TERM=xterm-256color exec ./hindsight snapshot" 2>/dev/null
+export KIOKU_INDEX="$H/index/tui.db"
+tmux new-session -d -x 120 -y 40 -s "he2e-$$" "cd '$ROOT' && HOME='$HOME' KIOKU_INDEX='$KIOKU_INDEX' KIOKU_THEME=light TERM=xterm-256color exec ./kioku snapshot" 2>/dev/null
 sleep 1
 tmux capture-pane -t "he2e-$$" -p > "$SCREENS/tui-start.txt" 2>&1; tmux capture-pane -t "he2e-$$" -ep > "$SCREENS/tui-start-ansi.txt" 2>&1
 start=$SECONDS; if grep -q 'SNAPSHOT' "$SCREENS/tui-start.txt"; then record 'TUI starts and displays matching hit' PASS $((SECONDS-start)) ''; else record 'TUI starts and displays matching hit' FAIL $((SECONDS-start)) "$(<"$SCREENS/tui-start.txt")"; fi
@@ -124,7 +124,7 @@ tmux send-keys -t "he2e-$$" v; sleep .15; tmux send-keys -t "he2e-$$" h; sleep .
 if grep -Fq '48;2;253;232;154' "$SCREENS/tui-pen-ansi.txt"; then record 'Highlight pen background color' PASS 0 ''; else record 'Highlight pen background color' FAIL 0 'pen color not found'; fi
 # Ctrl-C exits UI; tmux remains-on-exit lets us assert the process is dead.
 tmux send-keys -t "he2e-$$" C-c; sleep .5; tmux capture-pane -t "he2e-$$" -p > "$SCREENS/tui-after-ctrl-c.txt" 2>&1; state=$(tmux display-message -p -t "he2e-$$" '#{pane_dead}' 2>/dev/null || echo yes)
-if [[ $state == 1 ]] && ! grep -q 'hindsight ▸' "$SCREENS/tui-after-ctrl-c.txt"; then record 'Ctrl-C exits and restores terminal (process + alternate screen)' PASS 0 ''; else record 'Ctrl-C exits and restores terminal (process exits)' FAIL 0 "pane_dead=$state"; fi
+if [[ $state == 1 ]] && ! grep -q 'kioku ▸' "$SCREENS/tui-after-ctrl-c.txt"; then record 'Ctrl-C exits and restores terminal (process + alternate screen)' PASS 0 ''; else record 'Ctrl-C exits and restores terminal (process exits)' FAIL 0 "pane_dead=$state"; fi
 
 # Stub agents and editor: assert exec argv/cwd and detached editor arguments.
 STUB="$TMP/stub"; mkdir -p "$STUB"; export STUBLOG="$TMP/stub.log"
@@ -135,22 +135,22 @@ SH
 chmod +x "$STUB/$tool"; done
 export PATH="$STUB:$PATH"
 # Resume Claude: execute stub in real synthetic cwd after selecting the first hit.
-export HINDSIGHT_INDEX="$H/index/resume.db"
-tmux new-session -d -x 100 -y 32 -s "hrsm-$$" "cd '$ROOT' && HOME='$HOME' PATH='$PATH' STUBLOG='$STUBLOG' HINDSIGHT_INDEX='$HINDSIGHT_INDEX' TERM=xterm-256color exec ./hindsight --harness claude snapshot" 2>/dev/null
+export KIOKU_INDEX="$H/index/resume.db"
+tmux new-session -d -x 100 -y 32 -s "hrsm-$$" "cd '$ROOT' && HOME='$HOME' PATH='$PATH' STUBLOG='$STUBLOG' KIOKU_INDEX='$KIOKU_INDEX' TERM=xterm-256color exec ./kioku --harness claude snapshot" 2>/dev/null
 sleep 1; tmux send-keys -t "hrsm-$$" Escape; sleep .2; tmux send-keys -t "hrsm-$$" Enter; sleep .8
 CWD_PHYS=$(cd "$H/work/demo" && pwd -P)
 if grep -Fq "claude|$CWD_PHYS|--resume 11111111-1111-4111-8111-111111111111" "$STUBLOG" 2>/dev/null; then record 'Resume Claude stub argv + cwd' PASS 0 "$(tail -1 "$STUBLOG")"; else record 'Resume Claude stub argv + cwd' FAIL 0 "$(cat "$STUBLOG" 2>/dev/null || echo no stub call)"; fi
 # Codex and Pi use their harness-specific resume forms too.
 for harness in codex pi; do
-  session="hrsm-$harness-$$"; export HINDSIGHT_INDEX="$H/index/resume-$harness.db"
-  tmux new-session -d -x 100 -y 32 -s "$session" "cd '$ROOT' && HOME='$HOME' PATH='$PATH' STUBLOG='$STUBLOG' HINDSIGHT_INDEX='$HINDSIGHT_INDEX' TERM=xterm-256color exec ./hindsight --harness $harness snapshot" 2>/dev/null
+  session="hrsm-$harness-$$"; export KIOKU_INDEX="$H/index/resume-$harness.db"
+  tmux new-session -d -x 100 -y 32 -s "$session" "cd '$ROOT' && HOME='$HOME' PATH='$PATH' STUBLOG='$STUBLOG' KIOKU_INDEX='$KIOKU_INDEX' TERM=xterm-256color exec ./kioku --harness $harness snapshot" 2>/dev/null
   sleep 1; tmux send-keys -t "$session" Escape; sleep .2; tmux send-keys -t "$session" Enter; sleep .6
   if [[ $harness == codex ]]; then expected="codex|$CWD_PHYS|resume 22222222-2222-4222-8222-222222222222"; else pi_path=$(python3 -c 'import os,sys; print(os.path.normpath(sys.argv[1]))' "$H/.pi/agent/sessions/-work-demo/33333333-3333-4333-8333-333333333333.jsonl"); expected="pi|$CWD_PHYS|--session $pi_path"; fi
   if grep -Fq "$expected" "$STUBLOG" 2>/dev/null; then record "Resume $harness stub argv + cwd" PASS 0 "$expected"; else record "Resume $harness stub argv + cwd" FAIL 0 "expected $expected; log: $(cat "$STUBLOG" 2>/dev/null)"; fi
 done
 # Editor configuration takes precedence and receives project cwd while TUI survives.
-export HINDSIGHT_INDEX="$H/index/editor.db" HINDSIGHT_EDITOR="$STUB/zed"
-tmux new-session -d -x 100 -y 32 -s "hedt-$$" "cd '$ROOT' && HOME='$HOME' PATH='$PATH' STUBLOG='$STUBLOG' HINDSIGHT_EDITOR='$HINDSIGHT_EDITOR' HINDSIGHT_INDEX='$HINDSIGHT_INDEX' TERM=xterm-256color exec ./hindsight snapshot" 2>/dev/null
+export KIOKU_INDEX="$H/index/editor.db" KIOKU_EDITOR="$STUB/zed"
+tmux new-session -d -x 100 -y 32 -s "hedt-$$" "cd '$ROOT' && HOME='$HOME' PATH='$PATH' STUBLOG='$STUBLOG' KIOKU_EDITOR='$KIOKU_EDITOR' KIOKU_INDEX='$KIOKU_INDEX' TERM=xterm-256color exec ./kioku snapshot" 2>/dev/null
 sleep 1; tmux send-keys -t "hedt-$$" Escape; sleep .2; tmux send-keys -t "hedt-$$" o; sleep .5
 if grep -Fq 'zed|' "$STUBLOG" 2>/dev/null && grep -Fq 'work/demo' "$STUBLOG" 2>/dev/null; then record 'Editor stub launch + project directory' PASS 0 "$(tail -1 "$STUBLOG")"; else record 'Editor stub launch + project directory' FAIL 0 "zed not launched with project directory; log=$(cat "$STUBLOG" 2>/dev/null)"; fi
 tmux capture-pane -t "hedt-$$" -p > "$SCREENS/tui-editor.txt" 2>&1
@@ -158,15 +158,15 @@ if tmux has-session -t "hedt-$$" 2>/dev/null; then record 'Editor launch leaves 
 
 tmux kill-session -t "hedt-$$" 2>/dev/null || :
 # n/N must still navigate to matching tool-output messages in the transcript.
-export HINDSIGHT_INDEX="$H/index/tool-nav.db"
-tmux new-session -d -x 120 -y 40 -s "htool-$$" "cd '$ROOT' && HOME='$HOME' HINDSIGHT_INDEX='$HINDSIGHT_INDEX' HINDSIGHT_THEME=light TERM=xterm-256color exec ./hindsight toolprobeonly" 2>/dev/null
+export KIOKU_INDEX="$H/index/tool-nav.db"
+tmux new-session -d -x 120 -y 40 -s "htool-$$" "cd '$ROOT' && HOME='$HOME' KIOKU_INDEX='$KIOKU_INDEX' KIOKU_THEME=light TERM=xterm-256color exec ./kioku toolprobeonly" 2>/dev/null
 sleep 1; tmux send-keys -t "htool-$$" Escape; sleep .2; tmux send-keys -t "htool-$$" n; sleep .2; tmux capture-pane -t "htool-$$" -p > "$SCREENS/tui-tool-nav-next.txt"
 tmux send-keys -t "htool-$$" N; sleep .2; tmux capture-pane -t "htool-$$" -p > "$SCREENS/tui-tool-nav-prev.txt"
 if grep -Eq '[✱›].*tool.*toolprobeonly' "$SCREENS/tui-tool-nav-next.txt" && grep -Eq '[✱›].*tool.*toolprobeonly' "$SCREENS/tui-tool-nav-prev.txt"; then record 'TUI n/N visits matching tool hit' PASS 0 'both directions retain the tool hit in transcript'; else record 'TUI n/N visits matching tool hit' FAIL 0 "n=$(grep -E 'toolprobeonly' "$SCREENS/tui-tool-nav-next.txt") N=$(grep -E 'toolprobeonly' "$SCREENS/tui-tool-nav-prev.txt")"; fi
 tmux kill-session -t "htool-$$" 2>/dev/null || :
 # Truncation test has a hit crossing a Latin word at the snippet's right boundary.
-export HINDSIGHT_INDEX="$H/index/trunc.db"
-tmux new-session -d -x 120 -y 40 -s "htrunc-$$" "cd '$ROOT' && HOME='$HOME' HINDSIGHT_INDEX='$HINDSIGHT_INDEX' HINDSIGHT_THEME=light TERM=xterm-256color exec ./hindsight cutprobe" 2>/dev/null
+export KIOKU_INDEX="$H/index/trunc.db"
+tmux new-session -d -x 120 -y 40 -s "htrunc-$$" "cd '$ROOT' && HOME='$HOME' KIOKU_INDEX='$KIOKU_INDEX' KIOKU_THEME=light TERM=xterm-256color exec ./kioku cutprobe" 2>/dev/null
 sleep 1; tmux capture-pane -t "htrunc-$$" -p > "$SCREENS/tui-truncation.txt" 2>&1
 python3 - "$SCREENS/tui-truncation.txt" <<'PY' > "$TMP/truncation-check.txt"
 import sys
@@ -210,10 +210,10 @@ pi=root/'.pi/agent/sessions/zz-old/999-old.jsonl'; pi.parent.mkdir(parents=True)
 rows=[{'type':'session','version':3,'id':'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','timestamp':'2025-01-01T00:00:00Z','cwd':'/work/old'},{'type':'message','id':'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1','timestamp':'2025-01-01T00:00:01Z','message':{'role':'user','content':[{'type':'text','text':'synthetic OLDEST_MATCH_MARKER'}]}}]
 pi.write_text('\n'.join(json.dumps(x) for x in rows)+'\n')
 PY
-export HOME="$PERF" HINDSIGHT_INDEX="$TMP/perf.db"
+export HOME="$PERF" KIOKU_INDEX="$TMP/perf.db"
 python3 - "$BIN" "$TMP/perf-metrics.json" <<'PY'
 import json,math,os,statistics,subprocess,sys,time
-binary,outfile=sys.argv[1:]; env=os.environ.copy(); env['HINDSIGHT_DEBUG_TIMING']='1'
+binary,outfile=sys.argv[1:]; env=os.environ.copy(); env['KIOKU_DEBUG_TIMING']='1'
 t=time.perf_counter_ns(); index=subprocess.run([binary,'index','--rebuild'],env=env,text=True,capture_output=True); index_ms=(time.perf_counter_ns()-t)/1e6
 queries=['perfneedle','synthetic','neutral','"large fixture"','"synthetic message"','-perfneedle','large','fixture','message','neutral 42','neutral 17','魚池','紅茶','日本語','한국어','perfneed','"neutral synthetic"','-neutral','"fixture message"','absenttoken']
 latencies=[]; failures=[]; results=[]; samples=[]
@@ -250,14 +250,14 @@ partial=json.dumps({'timestamp':'2026-09-27T12:01:00Z','type':'response_item','p
 with p.open('ab') as f: f.write(partial[:-1])
 pathlib.Path(sys.argv[2]).write_bytes(partial[-1:]+b'\n')
 PY
-start=$SECONDS; appended=$(HINDSIGHT_DEBUG_TIMING=1 "$BIN" --json appendtoken 2>"$TMP/append-timing.txt"); append_rc=$?; append_ms=$(sed -nE 's/^timing sync_changes=([0-9.]+)ms$/\1/p' "$TMP/append-timing.txt"); after_append=$("$BIN" index 2>&1)
+start=$SECONDS; appended=$(KIOKU_DEBUG_TIMING=1 "$BIN" --json appendtoken 2>"$TMP/append-timing.txt"); append_rc=$?; append_ms=$(sed -nE 's/^timing sync_changes=([0-9.]+)ms$/\1/p' "$TMP/append-timing.txt"); after_append=$("$BIN" index 2>&1)
 if ((append_rc==0)) && grep -q appendtoken <<<"$appended" && grep -q 'codex: 200001 messages' <<<"$after_append" && grep -q '0 changed' <<<"$after_append" && [[ -n $append_ms ]] && awk -v x="$append_ms" 'BEGIN{exit !(x<200)}'; then record 'Append sync: next CLI query finds new line; only tail parsed' PASS $((SECONDS-start)) "sync_changes=${append_ms}ms; $after_append"; else record 'Append sync: next CLI query finds new line; only tail parsed' FAIL $((SECONDS-start)) "query=$appended timing=$(cat "$TMP/append-timing.txt") index=$after_append"; fi
-partial=$(HINDSIGHT_DEBUG_TIMING=1 "$BIN" --json partialtoken 2>"$TMP/partial-timing.txt"); partial_rc=$?; if ((partial_rc==0)) && [[ -z $partial ]]; then record 'Partial final line is withheld until newline' PASS 0 "$(cat "$TMP/partial-timing.txt")"; else record 'Partial final line is withheld until newline' FAIL 0 "unexpected query output: $partial"; fi
+partial=$(KIOKU_DEBUG_TIMING=1 "$BIN" --json partialtoken 2>"$TMP/partial-timing.txt"); partial_rc=$?; if ((partial_rc==0)) && [[ -z $partial ]]; then record 'Partial final line is withheld until newline' PASS 0 "$(cat "$TMP/partial-timing.txt")"; else record 'Partial final line is withheld until newline' FAIL 0 "unexpected query output: $partial"; fi
 cat "$TMP/partial-rest" >> "$append_file"; completed=$("$BIN" --json partialtoken 2>&1); complete_index=$("$BIN" index 2>&1)
 if grep -q partialtoken <<<"$completed" && grep -q 'codex: 200002 messages' <<<"$complete_index" && grep -q '0 changed' <<<"$complete_index"; then record 'Partial line is re-read and indexed when completed' PASS 0 "$complete_index"; else record 'Partial line is re-read and indexed when completed' FAIL 0 "query=$completed index=$complete_index"; fi
 
 # Independent read-only real-store count versus app indexing with an isolated DB.
-if [[ ${HINDSIGHT_E2E_REAL:-0} == 1 ]]; then
+if [[ ${KIOKU_E2E_REAL:-0} == 1 ]]; then
 REALHOME="$REALHOME_DEFAULT"; REALTMP="$TMP/real"; mkdir -p "$REALTMP" "$TEST/out"; export REALHOME REALTMP
 python3 - <<'PY' > "$REALTMP/independent.txt"
 import glob,json,os
@@ -280,7 +280,7 @@ for h,pat in patterns.items():
   except (OSError,UnicodeError): pass
  print(h,len(files),n)
 PY
-export HOME="$REALHOME" HINDSIGHT_INDEX="$REALTMP/index.db"
+export HOME="$REALHOME" KIOKU_INDEX="$REALTMP/index.db"
 start=$SECONDS; realout=$("$BIN" index --rebuild 2>&1); rc=$?; python3 - "$REALTMP/independent.txt" "$REALTMP/app.txt" <<'PY'
 import sqlite3,sys
 rows=sqlite3.connect(sys.argv[2].replace('app.txt','index.db')).execute('select harness,count(distinct uid),sum((select count(*) from messages m where m.session_uid=s.uid)) from sessions s group by harness').fetchall()
@@ -296,9 +296,9 @@ for h,n in ind.items():
  if n and a<n: print(f'{h}: indexed={a} below independent user/assistant lines={n}'); sys.exit(1)
  if n and not a: print(f'{h}: independent={n}, indexed=0'); sys.exit(1)
 PY
-then record 'Real stores: read-only independent lower-bound sanity' PASS $((SECONDS-start)) "$(tr '\n' ';' < "$TEST/out/real-store-counts.txt"); lower-bound only: indexed counts include tool rows and split content blocks"; else record 'Real stores: read-only independent lower-bound sanity' FAIL $((SECONDS-start)) "$realout; $(tr '\n' ';' < "$TEST/out/real-store-counts.txt")"; failbug 'Real store message undercount' 'HINDSIGHT_INDEX=<temp>/index.db ./hindsight index --rebuild; compare to test/out/real-store-counts.txt' 'indexed rows >= independent user/assistant text blocks' "$realout; see test/out/real-store-counts.txt"; fi
+then record 'Real stores: read-only independent lower-bound sanity' PASS $((SECONDS-start)) "$(tr '\n' ';' < "$TEST/out/real-store-counts.txt"); lower-bound only: indexed counts include tool rows and split content blocks"; else record 'Real stores: read-only independent lower-bound sanity' FAIL $((SECONDS-start)) "$realout; $(tr '\n' ';' < "$TEST/out/real-store-counts.txt")"; failbug 'Real store message undercount' 'KIOKU_INDEX=<temp>/index.db ./kioku index --rebuild; compare to test/out/real-store-counts.txt' 'indexed rows >= independent user/assistant text blocks' "$realout; see test/out/real-store-counts.txt"; fi
 else
-  skip 'Real stores: read-only independent lower-bound sanity' 'Set HINDSIGHT_E2E_REAL=1 to opt in to reading this machine’s ~/.claude, ~/.codex, and ~/.pi stores.'
+  skip 'Real stores: read-only independent lower-bound sanity' 'Set KIOKU_E2E_REAL=1 to opt in to reading this machine’s ~/.claude, ~/.codex, and ~/.pi stores.'
 fi
 
 printf '\n**Summary:** %d PASS, %d FAIL.\n' "$PASS" "$FAIL" >> "$REPORT"
@@ -306,7 +306,7 @@ printf '\n**Summary:** %d PASS, %d FAIL.\n' "$PASS" "$FAIL" >> "$REPORT"
 redact_root=$(cd "$TMP" && pwd -P)
 for f in "$REPORT" "$TEST/BUGS.md" "$SCREENS"/*; do
   [[ -f $f ]] || continue
-  sed -i '' -e "s#${redact_root}#<fixture>#g" -e "s#${TMP}#<fixture>#g" -e "s#/private/var/folders/[^ |\"']*/T/hindsight-e2e\.[A-Za-z0-9]*#<fixture>#g" -e "s#/var/folders/[^ |\"']*/T/hindsight-e2e\.[A-Za-z0-9]*#<fixture>#g" -e "s#${ROOT}#<repo>#g" -E -e "s#(/private)?/var/folders/[^ |\"']*#<fixture>#g" "$f"
+  sed -i '' -e "s#${redact_root}#<fixture>#g" -e "s#${TMP}#<fixture>#g" -e "s#/private/var/folders/[^ |\"']*/T/kioku-e2e\.[A-Za-z0-9]*#<fixture>#g" -e "s#/var/folders/[^ |\"']*/T/kioku-e2e\.[A-Za-z0-9]*#<fixture>#g" -e "s#${ROOT}#<repo>#g" -E -e "s#(/private)?/var/folders/[^ |\"']*#<fixture>#g" "$f"
 done
 printf '%d PASS / %d FAIL — report: test/e2e-report.md\n' "$PASS" "$FAIL"
 ((FAIL==0))

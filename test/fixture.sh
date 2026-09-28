@@ -13,7 +13,7 @@ if [ "$#" -eq 1 ]; then
   fi
   mkdir -p "$home"
 else
-  home=$(mktemp -d "${TMPDIR:-/tmp}/hindsight-fixture.XXXXXX")
+  home=$(mktemp -d "${TMPDIR:-/tmp}/kioku-fixture.XXXXXX")
 fi
 
 # All paths and transcript text below are synthetic; this script never reads the real HOME.

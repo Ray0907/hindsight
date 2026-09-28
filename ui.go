@@ -71,7 +71,7 @@ type debounce int
 
 func newModel(db *sql.DB, q, h string, rows []hit, mouse bool) model {
 	p := light
-	if os.Getenv("HINDSIGHT_THEME") == "dark" || os.Getenv("HINDSIGHT_THEME") == "" && termenv.HasDarkBackground() {
+	if os.Getenv("KIOKU_THEME") == "dark" || os.Getenv("KIOKU_THEME") == "" && termenv.HasDarkBackground() {
 		p = dark
 	}
 	m := model{db: db, q: q, harness: h, rows: rows, mouse: mouse, pal: p, width: 80, height: 24, cursor: -1, focus: true}
@@ -649,7 +649,7 @@ func positions(r []rune, word string) []int {
 }
 func (m model) View() string {
 	if m.width < 25 || m.height < 10 {
-		return fitLine("hindsight · enlarge terminal", max(0, m.width))
+		return fitLine("kioku · enlarge terminal", max(0, m.width))
 	}
 	w := m.width
 	var b strings.Builder
@@ -665,7 +665,7 @@ func (m model) View() string {
 		}
 		count = fmt.Sprintf("%d messages · %d sessions", len(m.rows), len(sessions))
 	}
-	q := m.color("hindsight", m.pal.ink) + " " + m.color("▸", m.pal.muted) + " "
+	q := m.color("kioku", m.pal.ink) + " " + m.color("▸", m.pal.muted) + " "
 	input := displayInline(m.q)
 	if m.focus {
 		input += "▌"

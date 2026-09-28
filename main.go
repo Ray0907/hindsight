@@ -22,12 +22,12 @@ var output io.Writer = os.Stdout
 
 func main() {
 	if e := run(); e != nil {
-		fmt.Fprintln(os.Stderr, "hindsight:", e)
+		fmt.Fprintln(os.Stderr, "kioku:", e)
 		os.Exit(1)
 	}
 }
 func timing(label string, started time.Time) {
-	if os.Getenv("HINDSIGHT_DEBUG_TIMING") == "1" {
+	if os.Getenv("KIOKU_DEBUG_TIMING") == "1" {
 		fmt.Fprintf(os.Stderr, "timing %s=%.2fms\n", label, float64(time.Since(started).Microseconds())/1000)
 	}
 }
@@ -38,7 +38,7 @@ func run() error {
 	if index {
 		args = args[1:]
 	}
-	fs := flag.NewFlagSet("hindsight", flag.ContinueOnError)
+	fs := flag.NewFlagSet("kioku", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	rebuild := fs.Bool("rebuild", false, "rebuild index")
 	jsonFlag := fs.Bool("json", false, "print JSON lines")

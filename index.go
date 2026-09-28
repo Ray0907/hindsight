@@ -12,14 +12,14 @@ import (
 	"syscall"
 	"time"
 
-	_ "github.com/Ray0907/hindsight/internal/cjk"
+	_ "github.com/Ray0907/kioku/internal/cjk"
 	_ "github.com/mattn/go-sqlite3"
 )
 
 func roots() map[string]string {
 	home := os.Getenv("HOME")
 	out := map[string]string{}
-	for _, p := range []struct{ h, env, rel string }{{"claude", "HINDSIGHT_CLAUDE_DIR", ".claude/projects"}, {"codex", "HINDSIGHT_CODEX_DIR", ".codex/sessions"}, {"pi", "HINDSIGHT_PI_DIR", ".pi/agent/sessions"}} {
+	for _, p := range []struct{ h, env, rel string }{{"claude", "KIOKU_CLAUDE_DIR", ".claude/projects"}, {"codex", "KIOKU_CODEX_DIR", ".codex/sessions"}, {"pi", "KIOKU_PI_DIR", ".pi/agent/sessions"}} {
 		out[p.h] = os.Getenv(p.env)
 		if out[p.h] == "" {
 			out[p.h] = filepath.Join(home, p.rel)
@@ -28,14 +28,14 @@ func roots() map[string]string {
 	return out
 }
 func indexPath() string {
-	if p := os.Getenv("HINDSIGHT_INDEX"); p != "" {
+	if p := os.Getenv("KIOKU_INDEX"); p != "" {
 		return p
 	}
 	root := os.Getenv("XDG_CACHE_HOME")
 	if root == "" {
 		root = filepath.Join(os.Getenv("HOME"), ".cache")
 	}
-	return filepath.Join(root, "hindsight", "index.db")
+	return filepath.Join(root, "kioku", "index.db")
 }
 func openDB() (*sql.DB, error) {
 	path := indexPath()

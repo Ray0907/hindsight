@@ -1,7 +1,7 @@
-hindsight ▸ toolprobeonly                                                                        1 messages · 1 sessions
+kioku ▸ toolprobeonly                                                                            1 messages · 1 sessions
 highlights none · press h in results to add
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-›▌ Bash · toolprobeonly output from helper                                                   claude  demo             5h
+›▌ Bash · toolprobeonly output from helper                                                   claude  demo            16h
 
 
 
@@ -15,7 +15,7 @@ highlights none · press h in results to add
 
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-▌ demo  <fixture>/home/work/demo  2026-09-27…     hit 1 of 1
+▌ demo  <fixture>/home/work/demo  2026-09-27  claude  hit 1 of 1
    11:00 you   rankprobe conversation conversation conversation conversation conversation conversation conversation
                conversation conversation conversation conversation conversation conversation conversation conversation
                conversation conversation conversation conversation conversation conversation conversation conversation

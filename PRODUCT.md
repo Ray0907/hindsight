@@ -33,7 +33,7 @@ Runs in the user's own terminal emulator, with the user's own monospace font and
 - Sources v1: Claude Code (`~/.claude/projects`), Codex (`~/.codex/sessions`), Pi (`~/.pi/agent/sessions`).
 - Query syntax follows fts5-cjk: bare word = contiguous phrase, space = AND, "quotes" = phrase, `-word` = exclude.
 - Resume commands: `claude --resume <id>`, `codex resume <id>`, Pi session path.
-- Open: product name `hindsight` is provisional.
+- Open: product name `kioku` is provisional.
 
 ## Brand Commitments
 

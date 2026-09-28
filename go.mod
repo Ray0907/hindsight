@@ -1,4 +1,4 @@
-module github.com/Ray0907/hindsight
+module github.com/Ray0907/kioku
 
 go 1.26.1
 

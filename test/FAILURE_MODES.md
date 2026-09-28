@@ -1,18 +1,18 @@
 # E2E failure modes
 
-Use a fresh synthetic `HOME` from `./test/fixture.sh` for every run. Run all commands from a working directory that is not the real project/session cwd. The real-store lower-bound sanity is opt-in (`HINDSIGHT_E2E_REAL=1`); default suite runs never inspect real stores. These are user-visible failures, not implementation suggestions.
+Use a fresh synthetic `HOME` from `./test/fixture.sh` for every run. Run all commands from a working directory that is not the real project/session cwd. The real-store lower-bound sanity is opt-in (`KIOKU_E2E_REAL=1`); default suite runs never inspect real stores. These are user-visible failures, not implementation suggestions.
 
 ## Discovery, parsing, and privacy
 
 - [ ] Indexes Claude Code files at `$HOME/.claude/projects/*/*.jsonl`, Codex rollouts at `$HOME/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`, and Pi sessions at `$HOME/.pi/agent/sessions/<dir>/*.jsonl`.
-- [ ] Honors `$HOME` and `HINDSIGHT_CLAUDE_DIR`, `HINDSIGHT_CODEX_DIR`, and `HINDSIGHT_PI_DIR` overrides independently; does not accidentally fall back to the real stores when pointed at fixture roots.
+- [ ] Honors `$HOME` and `KIOKU_CLAUDE_DIR`, `KIOKU_CODEX_DIR`, and `KIOKU_PI_DIR` overrides independently; does not accidentally fall back to the real stores when pointed at fixture roots.
 - [ ] Parses the harness-native envelope: Claude `type` plus nested `message.role/content` and session metadata; Codex `session_meta.payload.id/cwd` and `response_item.payload`; Pi `session` header plus `message.message.role/content`.
 - [ ] Extracts user and assistant text; emits tool calls/results as one `tool` line containing tool name plus first input/output line capped at 200 characters.
 - [ ] Drops Claude meta/side-channel content, command caveats, attachments, system prompts, thinking, and injected context; drops Codex base instructions/environment context and equivalent Pi noise.
 - [ ] Retains message timestamp, available model, session cwd, and project basename from cwd. Correctly maps assistant to `asst` and preserves user/tool role labels.
 - [ ] Skips malformed JSONL lines and continues processing later valid lines in the same file. A malformed/unsupported file cannot abort indexing of other files; skipped-file count is reported.
 - [ ] Empty, truncated, missing, unreadable, or structurally incomplete files do not panic, corrupt existing index data, or silently poison other sessions.
-- [ ] Never writes, modifies, truncates, renames, or deletes anything in any harness store. `$HINDSIGHT_INDEX` or the XDG/default cache path is the only product write target; fixture generation likewise writes only under its requested synthetic HOME.
+- [ ] Never writes, modifies, truncates, renames, or deletes anything in any harness store. `$KIOKU_INDEX` or the XDG/default cache path is the only product write target; fixture generation likewise writes only under its requested synthetic HOME.
 - [ ] Source identity/metadata tracking is stable; no duplicate messages/sessions after repeated scans.
 
 ## Incremental sync and index command
@@ -20,8 +20,8 @@ Use a fresh synthetic `HOME` from `./test/fixture.sh` for every run. Run all com
 - [ ] Initial launch sync indexes all three harnesses and shows current counts/progress (`indexing N/M`) without blocking the UI.
 - [ ] Unchanged path + mtime + size is skipped; changed file is reindexed (not appended/duplicated); deleted source file removes its indexed session; a new file is added.
 - [ ] Sync changes are atomic per sync: interruption/error does not leave half-replaced session/messages/source records.
-- [ ] `hindsight index` prints deterministic counts per harness. `hindsight index --rebuild` replaces stale index contents and produces the same result as a clean index.
-- [ ] `HINDSIGHT_INDEX` takes precedence; otherwise uses `$XDG_CACHE_HOME/hindsight/index.db`, then `~/.cache/hindsight/index.db`. No DB/artifacts are written to the fixture session roots.
+- [ ] `kioku index` prints deterministic counts per harness. `kioku index --rebuild` replaces stale index contents and produces the same result as a clean index.
+- [ ] `KIOKU_INDEX` takes precedence; otherwise uses `$XDG_CACHE_HOME/kioku/index.db`, then `~/.cache/kioku/index.db`. No DB/artifacts are written to the fixture session roots.
 
 ## Search and result semantics
 
@@ -36,7 +36,7 @@ Use a fresh synthetic `HOME` from `./test/fixture.sh` for every run. Run all com
 
 ## CLI and resume behavior
 
-- [ ] `hindsight` opens the TUI; `hindsight <query...>` pre-fills the query; `--no-mouse`, `--harness`, and `--version` are accepted as documented.
+- [ ] `kioku` opens the TUI; `kioku <query...>` pre-fills the query; `--no-mouse`, `--harness`, and `--version` are accepted as documented.
 - [ ] `--json <query...>` and non-TTY stdout emit valid JSON Lines (one object per result) and exit without terminal escape codes or interactive prompts. Every object contains exactly usable values for fields `harness`, `session_id`, `project`, `cwd`, `ts`, `role`, `text`, `snippet`, `resume_cmd`, and `path`.
 - [ ] JSON mode handles zero results, CJK, quotes, multiple query args, and paths/text requiring JSON escaping; output order matches TUI/index query semantics.
 - [ ] Resume action uses `claude --resume <sessionId>`, `codex resume <id>`, or `pi --session <file path>` as applicable, with the process cwd set to the session cwd.
@@ -46,7 +46,7 @@ Use a fresh synthetic `HOME` from `./test/fixture.sh` for every run. Run all com
 
 ## Editor, clipboard, and terminal lifecycle
 
-- [ ] `o` opens the project directory detached and leaves the TUI usable. Resolution order is `HINDSIGHT_EDITOR`, `$VISUAL`, first PATH match among `zed`, `cursor`, `code`, `subl`, first installed macOS app among Zed/Cursor/Visual Studio Code/Sublime Text in `/Applications` or `~/Applications`, then Finder via `open <dir>`.
+- [ ] `o` opens the project directory detached and leaves the TUI usable. Resolution order is `KIOKU_EDITOR`, `$VISUAL`, first PATH match among `zed`, `cursor`, `code`, `subl`, first installed macOS app among Zed/Cursor/Visual Studio Code/Sublime Text in `/Applications` or `~/Applications`, then Finder via `open <dir>`.
 - [ ] Does not choose TextEdit for a folder; status and footer hint identify the resolved editor (Finder on final fallback); failed launch reports failure without exiting.
 - [ ] `y` copies the exact resume command via `pbcopy` and OSC 52 and reports a status line; unavailable clipboard does not corrupt terminal state.
 - [ ] Ctrl-C, normal quit, resume, errors, and failed actions restore canonical/echo/cursor/alternate-screen state; no stuck raw mode or leaked child process.
@@ -63,7 +63,7 @@ Use a fresh synthetic `HOME` from `./test/fixture.sh` for every run. Run all com
 - [ ] Full mode shows every transcript message while preserving time-gap `⋯`; hit list is hidden. Current hit uses `selbg`; folding does not discard/mislabel hits.
 - [ ] Highlight pen tags add/remove by mouse; pens rotate yellow/green/pink backgrounds; red hit ink remains legible on every pen and red ink is never used on non-hit text.
 - [ ] Mouse query/hit/transcript clicks set correct focus/selection; wheel scrolls the zone under pointer; Tab/Shift-Tab cycle harness; Enter resumes; Esc in results closes active UI or quits; Ctrl-C quits.
-- [ ] Colors match `.impeccable/palettes.json` `log` role and `pens.json`, with theme detected from terminal background and `HINDSIGHT_THEME=light|dark` override. Contrast remains meaningful on both light and dark themes; active-state meaning is not conveyed by color alone.
+- [ ] Colors match `.impeccable/palettes.json` `log` role and `pens.json`, with theme detected from terminal background and `KIOKU_THEME=light|dark` override. Contrast remains meaningful on both light and dark themes; active-state meaning is not conveyed by color alone.
 - [ ] No decorative/redundant labels or “RESUMED” stamps; only useful metadata appears.
 
 ## Performance and robustness

@@ -11,7 +11,7 @@ import (
 )
 
 func editor() (string, []string) {
-	for _, s := range []string{os.Getenv("HINDSIGHT_EDITOR"), os.Getenv("VISUAL")} {
+	for _, s := range []string{os.Getenv("KIOKU_EDITOR"), os.Getenv("VISUAL")} {
 		if s != "" {
 			return s, strings.Fields(s)
 		}

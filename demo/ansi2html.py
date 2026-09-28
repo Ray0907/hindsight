@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Turn a `tmux capture-pane -e -p` dump into a standalone HTML terminal frame.
 
-Handles the SGR subset hindsight emits: 24-bit and 16/256 colours, bold, faint,
+Handles the SGR subset kioku emits: 24-bit and 16/256 colours, bold, faint,
 underline, reverse and resets. Usage: ansi2html.py <capture> <out.html> [bg] [fg]
 """
 import html, re, sys, unicodedata

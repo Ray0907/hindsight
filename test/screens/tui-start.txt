@@ -1,12 +1,12 @@
-hindsight ▸ snapshot▌                                                                            6 messages · 3 sessions
+kioku ▸ snapshot▌                                                                                6 messages · 3 sessions
 highlights none · press h in results to add
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-›▌ Find the snapshot and resume path; resuming should preserve JSON output.                  claude  demo             6h
- ▌ Search for snapshot, resum, json_extract, low-water, S3, and cjk.c.                       codex   demo             6h
- ▌ Find SNAPSHOT and resuming; test S3, json_extract, low-water, and cjk.c.                  pi      demo             6h
- ▌ SNAPSHOT: json_extract handles low-water marks, S3 uploads, cjk.c, and naïve input.       claude  demo             6h
- ▌ A snapshot can resume safely; the phrase is black tea, and naïve input is searchable.     pi      demo             6h
- ▌ SNAPSHOT is ready; resuming is safe, but a shorter prefix is not a match. The phrase is…  codex   demo             6h
+›▌ Find the snapshot and resume path; resuming should preserve JSON output.                  claude  demo            17h
+ ▌ Search for snapshot, resum, json_extract, low-water, S3, and cjk.c.                       codex   demo            17h
+ ▌ Find SNAPSHOT and resuming; test S3, json_extract, low-water, and cjk.c.                  pi      demo            17h
+ ▌ SNAPSHOT: json_extract handles low-water marks, S3 uploads, cjk.c, and naïve input.       claude  demo            17h
+ ▌ A snapshot can resume safely; the phrase is black tea, and naïve input is searchable.     pi      demo            17h
+ ▌ SNAPSHOT is ready; resuming is safe, but a shorter prefix is not a match. The phrase is…  codex   demo            17h
 
 
 
@@ -15,7 +15,7 @@ highlights none · press h in results to add
 
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-▌ demo  <fixture>/home/work/demo  2026-09-27…     hit 1 of 6
+▌ demo  <fixture>/home/work/demo  2026-09-27  claude  hit 1 of 6
 ›  10:00 you   Find the snapshot and resume path; resuming should preserve JSON output.
 ✱  10:00 asst  SNAPSHOT: json_extract handles low-water marks, S3 uploads, cjk.c, and naïve input.
      ⋯
