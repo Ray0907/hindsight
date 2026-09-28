@@ -55,15 +55,28 @@ The `sqlite_fts5` build tag is required.
 ```sh
 kioku                    # recent sessions
 kioku 紅茶                # interactive search
-kioku --json snapshot    # JSON Lines for scripts/agents
+kioku --json snapshot    # compact JSON page for scripts/agents
 kioku --harness pi 魚池   # restrict to one agent
 kioku index              # sync and print counts
 kioku index --rebuild    # replace the index
 ```
 
-When stdout is not a TTY, search prints JSON Lines automatically. `--version` prints the version; `--no-mouse` disables mouse input. The initial scan runs on first use; the TUI opens with its existing index and refreshes when the scan finishes.
+When stdout is not a TTY, search prints a compact text page; `--json` prints a structured JSON page. `--version` prints the version; `--no-mouse` disables mouse input. The initial scan runs on first use; the TUI opens with its existing index and refreshes when the scan finishes.
 
-Search: space means AND; `"black tea"` is an exact phrase; `-word` excludes; bare words are prefixes (`resum` finds `resuming`); use `kioku -- --help` to search a flag-like word. CJK terms match inside text, including single characters. Empty or negative-only queries show the latest message of each recent session. Results are limited to 300 by default (`--limit N` changes the JSON and TUI result count): selective queries use FTS5 BM25 (newest first on ties); queries whose positive ASCII terms and full FTS match both cover at least 90% use newest matching message time instead. Matching user/assistant messages appear before tool output, with the existing order preserved within each group. Only a single unquoted 1–2 letter Latin prefix is restricted to messages from the seven days before the index's latest timestamp; older matches for those broad queries are omitted.
+Search: space means AND; `"black tea"` is an exact phrase; `-word` excludes; bare words are prefixes (`resum` finds `resuming`); use `kioku -- --help` to search a flag-like word. CJK terms match inside text, including single characters. Empty or negative-only queries show the latest message of each recent session. The TUI shows up to 300 results by default; one-shot text and JSON pages show 10 (`--limit N` changes either): selective queries use FTS5 BM25 (newest first on ties); queries whose positive ASCII terms and full FTS match both cover at least 90% use newest matching message time instead. Matching user/assistant messages appear before tool output, with the existing order preserved within each group. Only a single unquoted 1–2 letter Latin prefix is restricted to messages from the seven days before the index's latest timestamp; older matches for those broad queries are omitted.
+
+## For agents
+
+```sh
+kioku --limit 5 snapshot                  # short refs + snippets, at most 5 hits
+kioku --limit 5 --cursor TOKEN snapshot   # next page, same query and flags
+kioku --sessions --limit 5 snapshot       # sessions ranked by their best hit
+kioku show a1b2c3d4e5f6:12 --context 3   # three messages either side of the hit
+kioku show a1b2c3d4e5f6 --context 0 --all    # walk the entire session, 10 messages/page
+kioku --json --limit 5 snapshot          # one JSON object with hits and next_cursor
+```
+
+Replace the example ref and token with values from your output. Refs are stable short hashes of the source-qualified session ID plus the message index; `show` also accepts an unambiguous native session ID. Search snippets use at most 160 display cells; `show` text uses at most 400. The hit header counts distinct sessions **on that page**. A `cursor:` footer (or JSON `next_cursor`) appears only when more results exist; reuse it with the same mode, query, and flags. `show --all` starts at the first message and pages through the full session. JSON mirrors the text fields without full transcripts; use `show` to expand a result. Cursors use offsets against the current index, so a simultaneous reindex can shift later pages.
 
 | Key | Action |
 | --- | --- |

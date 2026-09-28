@@ -21,24 +21,25 @@ var version = "dev"
 var output io.Writer = os.Stdout
 
 const usage = `Usage:
-  kioku [flags] [query]       Search (TUI on a terminal, JSON Lines otherwise)
-  kioku index [--rebuild]     Sync sources and print counts
-  kioku help                 Show this help
+  kioku [flags] [query]           Search (TUI on a terminal, compact pages otherwise)
+  kioku --sessions [query]        Matching sessions, ranked by best hit
+  kioku show <ref|session-id>     Message context or start of session
+  kioku index [--rebuild]         Sync sources and print counts
+  kioku help                      Show this help
 
-Flags:
-  --json                     Print JSON Lines
-  --limit N                  Maximum results (default 300; JSON and TUI)
-  --harness all|claude|codex|pi  Filter by agent (default all)
-  --rebuild                  Replace index (with index command)
-  --no-mouse                 Disable TUI mouse input
-  --version                  Print version
-  --help, -h                 Show this help
-
+Flags: --json (one JSON page), --limit N (default 10 for pages, 300 for TUI),
+       --cursor TOKEN (next page), --harness all|claude|codex|pi,
+       --context N (show: before/after, default 3), --all (show: whole session),
+       --no-mouse, --rebuild (index), --version, --help, -h.
 Query: space means AND; "black tea" is a phrase; -word excludes;
        bare words are prefixes. Use -- to search flag-like text:
-       kioku -- --help  (or kioku '"help"' for the word help).
-JSON fields: harness, session_id, project, cwd, ts, role, text,
-             snippet, resume_cmd, path.
+       kioku -- --help (or kioku '"help"' for the word help).
+JSON: {shown,total,sessions,hits,next_cursor} for search;
+      {shown,total,sessions,next_cursor} for --sessions;
+      {harness,project,cwd,date,resume_cmd,shown,total,messages,next_cursor} for show.
+      Hit fields: ref,harness,project,age,role,snippet.
+      Session fields: ref,harness,project,age,hits,best.
+      Show message fields: time,role,text,hit.
 Environment: KIOKU_INDEX, KIOKU_CLAUDE_DIR, KIOKU_CODEX_DIR,
              KIOKU_PI_DIR, KIOKU_EDITOR, KIOKU_THEME=light|dark,
              KIOKU_DEBUG_TIMING=1; HOME, XDG_CACHE_HOME, VISUAL.
@@ -63,14 +64,19 @@ func run() error {
 		return nil
 	}
 	index := len(args) > 0 && args[0] == "index"
-	if index {
+	show := len(args) > 0 && args[0] == "show"
+	if index || show {
 		args = args[1:]
 	}
 	fs := flag.NewFlagSet("kioku", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	rebuild := fs.Bool("rebuild", false, "rebuild index")
 	jsonFlag := fs.Bool("json", false, "print JSON lines")
-	limit := fs.Int("limit", 300, "maximum results")
+	limit := fs.Int("limit", 0, "maximum results")
+	cursor := fs.String("cursor", "", "next page token")
+	contextSize := fs.Int("context", 3, "messages before and after")
+	all := fs.Bool("all", false, "show full session")
+	sessions := fs.Bool("sessions", false, "group by session")
 	noMouse := fs.Bool("no-mouse", false, "disable mouse")
 	harness := fs.String("harness", "all", "all, claude, codex or pi")
 	ver := fs.Bool("version", false, "print version")
@@ -86,9 +92,9 @@ func run() error {
 			fmt.Fprint(output, usage)
 			return nil
 		}
-		if a == "--limit" {
+		if a == "--limit" || a == "--cursor" || a == "--context" {
 			if i+1 == len(args) {
-				return fmt.Errorf("--limit requires a number")
+				return fmt.Errorf("%s requires a value", a)
 			}
 			if e := fs.Parse(args[i : i+2]); e != nil {
 				return e
@@ -96,7 +102,7 @@ func run() error {
 			i++
 			continue
 		}
-		if strings.HasPrefix(a, "--limit=") {
+		if strings.HasPrefix(a, "--limit=") || strings.HasPrefix(a, "--cursor=") || strings.HasPrefix(a, "--context=") {
 			if e := fs.Parse([]string{a}); e != nil {
 				return e
 			}
@@ -112,7 +118,7 @@ func run() error {
 			continue
 		}
 		switch a {
-		case "--rebuild", "--json", "--no-mouse", "--version":
+		case "--rebuild", "--json", "--no-mouse", "--version", "--sessions", "--all":
 			if e := fs.Parse([]string{a}); e != nil {
 				return e
 			}
@@ -124,8 +130,31 @@ func run() error {
 		fmt.Fprintln(output, version)
 		return nil
 	}
+	oneShot := show || *sessions || *jsonFlag || *cursor != "" || !isatty.IsTerminal(os.Stdout.Fd())
+	setLimit := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == "limit" {
+			setLimit = true
+		}
+	})
+	if !setLimit {
+		if oneShot {
+			*limit = 10
+		} else {
+			*limit = 300
+		}
+	}
 	if *limit < 1 {
 		return fmt.Errorf("--limit must be a positive integer")
+	}
+	if *contextSize < 0 {
+		return fmt.Errorf("--context must be nonnegative")
+	}
+	if show && (*sessions || len(words) != 1) {
+		return fmt.Errorf("show requires one reference (and cannot use --sessions)")
+	}
+	if !show && *all {
+		return fmt.Errorf("--all requires show")
 	}
 	if *harness != "all" && *harness != "claude" && *harness != "codex" && *harness != "pi" {
 		return fmt.Errorf("invalid harness %q", *harness)
@@ -150,21 +179,50 @@ func run() error {
 		return nil
 	}
 	q := strings.Join(words, " ")
-	if *jsonFlag || !isatty.IsTerminal(os.Stdout.Fd()) {
+	if oneShot {
 		syncStart := time.Now()
 		_, e = syncIndex(db, false, nil)
 		timing("sync", syncStart)
 		if e != nil {
 			return e
 		}
-		rows, e := search(context.Background(), db, q, *harness, *limit)
-		if e != nil {
-			return e
+		mode := "hits"
+		if *sessions {
+			mode = "sessions"
 		}
-		renderStart := time.Now()
-		e = jsonLines(rows)
-		timing("render", renderStart)
-		return e
+		if show {
+			mode = "show"
+			q = ""
+		}
+		key := pageKey{Mode: mode, Query: q, Harness: *harness, Limit: *limit, Context: *contextSize, JSON: *jsonFlag, All: *all, NoMouse: *noMouse, Rebuild: *rebuild}
+		if show {
+			key.Ref = words[0]
+		}
+		offset, err := key.offset(*cursor)
+		if err != nil {
+			return err
+		}
+		ctx := context.Background()
+		switch mode {
+		case "show":
+			page, err := compactShow(ctx, db, key, offset)
+			if err != nil {
+				return err
+			}
+			return renderShow(page, *jsonFlag)
+		case "sessions":
+			page, err := compactSessions(ctx, db, key, offset)
+			if err != nil {
+				return err
+			}
+			return renderSessions(page, *jsonFlag)
+		default:
+			page, err := compactSearch(ctx, db, key, offset)
+			if err != nil {
+				return err
+			}
+			return renderHits(page, *jsonFlag)
+		}
 	}
 	rows, e := search(context.Background(), db, q, *harness, *limit)
 	if e != nil {
