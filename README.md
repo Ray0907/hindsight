@@ -2,7 +2,7 @@
 
 <sub><i>kioku</i> (記憶) is Japanese for "memory".</sub>
 
-**Search every Claude Code, Codex, Pi, Grok and OpenCode session on your Mac, down to the message, in English, Chinese, Japanese and Korean.**
+**Search every Claude Code, Codex, Pi, Grok, OpenCode and Cursor CLI session on your Mac, down to the message, in English, Chinese, Japanese and Korean.**
 
 <p align="center">
   <img src="assets/kioku.png" alt="kioku: a search for checkout lists matching messages from Claude Code, Codex and Pi, with the selected session's transcript below" width="880">
@@ -94,7 +94,7 @@ Replace the example ref and token with values from your output. Refs are stable 
 | o | open project in editor |
 | y | copy resume command |
 | Enter | resume selected session in its original directory |
-| Tab / Shift-Tab | cycle all / claude / codex / pi / grok / opencode |
+| Tab / Shift-Tab | cycle all / claude / codex / pi / grok / opencode / cursor |
 | ? | help |
 | Ctrl-C / Esc in results | quit |
 
@@ -113,8 +113,11 @@ Editor resolution: `KIOKU_EDITOR`, then `VISUAL`, then the first available `zed`
 | Pi | `KIOKU_PI_DIR` | `$PI_CODING_AGENT_DIR/sessions` | `~/.pi/agent/sessions` |
 | Grok | `KIOKU_GROK_DIR` | — | `~/.grok/sessions` |
 | OpenCode | `KIOKU_OPENCODE_DB` | `$XDG_DATA_HOME/opencode/opencode.db` | `~/.local/share/opencode/opencode.db` |
+| Cursor CLI | `KIOKU_CURSOR_DIR` | — | `~/.cursor/chats` |
 
 Empty variables count as unset; a `~/` prefix expands to `$HOME`. kioku overrides point directly at the transcript root; native variables point at the parent config directory. A missing explicit root indexes nothing for that harness, without falling back to the default. Grok sessions are directories containing `chat_history.jsonl` and optional `summary.json`; metadata comes from the summary, with cwd/native ID falling back to the URL-decoded parent/session directory names. Only the history file is tracked for incremental appends. Use `--harness grok` to filter them. OpenCode's override points to the SQLite database, not a directory; both v1 and v2 sessions are read in read-only mode, including live WAL messages. SQLite may update transient `-shm` reader/WAL-index coordination fields; DB/WAL data is never written or checkpointed. If loading fails, cached OpenCode sessions are retained while other harnesses continue syncing. V2 takes precedence for duplicate IDs; subagent sessions and reasoning are skipped. Changed sessions are replaced using session/message timestamps rather than file appends. Use `--harness opencode` to filter them; resume runs `opencode --session <id>` from the session's directory. Set `KIOKU_DEBUG_TIMING=1` for startup/sync/query/snippet/render timings on stderr.
+
+Cursor CLI sessions are `~/.cursor/chats/<md5(cwd)>/<session-id>/{meta.json,store.db}`. Only JSON user/assistant message blobs are read, in rowid order (an approximation: the store has no recorded message order). Binary graph nodes and Cursor IDE `state.vscdb` stores are ignored; sessions without a metadata cwd are skipped. Session start uses metadata `createdAtMs`; messages use `store.db` mtime because they have no timestamps. Changes to either file's mtime/size replace the whole session. Use `--harness cursor`; resume runs `cursor-agent --resume <id>` from the session's directory.
 
 Search tokenization uses [fts5-cjk](https://github.com/Ray0907/fts5-cjk), statically linked under its original license in `internal/cjk/`.
 

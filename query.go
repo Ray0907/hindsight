@@ -79,6 +79,8 @@ func resumeCmd(h, id, path, cwd string) string {
 		return "codex resume " + id
 	case "opencode":
 		return "opencode --session " + shellQuote(id)
+	case "cursor":
+		return "cursor-agent --resume " + shellQuote(id)
 	case "grok":
 		return "cd " + shellQuote(cwd)
 	default:

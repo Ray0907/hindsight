@@ -23,7 +23,7 @@ h=pathlib.Path(sys.argv[1])
 for p in h.rglob('*.jsonl'):
  p.write_text(p.read_text().replace('/work/demo',str(h/'work/demo')))
 PY
-unset KIOKU_CLAUDE_DIR KIOKU_CODEX_DIR KIOKU_PI_DIR KIOKU_GROK_DIR KIOKU_OPENCODE_DB XDG_DATA_HOME CLAUDE_CONFIG_DIR CODEX_HOME PI_CODING_AGENT_DIR
+unset KIOKU_CLAUDE_DIR KIOKU_CODEX_DIR KIOKU_PI_DIR KIOKU_GROK_DIR KIOKU_OPENCODE_DB KIOKU_CURSOR_DIR XDG_DATA_HOME CLAUDE_CONFIG_DIR CODEX_HOME PI_CODING_AGENT_DIR
 export HOME="$H" KIOKU_INDEX="$H/index/index.db" KIOKU_THEME=light TERM=xterm-256color
 
 start=$SECONDS; out=$("$BIN" index --rebuild 2>&1); rc=$?
@@ -95,6 +95,97 @@ for override,total in [('~/.grok/sessions',2),(str(home/'missing'),0),(str(root)
 print('PASS: summary fallback, native ID fallback, empty sessions, exact history discovery, override/tilde/missing-root behavior.')
 PY
 then record 'Grok: discovery, metadata, search/show/sessions, append, read-only' PASS $((SECONDS-start)) 'test/screens/grok.txt; resume is cd only (grok unavailable locally)'; else record 'Grok: discovery, metadata, search/show/sessions, append, read-only' FAIL $((SECONDS-start)) "$(<"$SCREENS/grok.txt")"; fi
+
+# Cursor CLI ignores binary graph nodes and IDE stores; changes replace the whole session.
+start=$SECONDS
+if python3 - "$BIN" "$H/cursor-home" "$SCREENS/cursor.jsonl" <<'PY' > "$SCREENS/cursor.txt" 2>&1
+import hashlib,json,os,pathlib,shlex,shutil,sqlite3,subprocess,sys
+binary,home,artifact=sys.argv[1:]; home=pathlib.Path(home); root=home/'.cursor/chats'
+meta=next(root.glob('*/666*/meta.json')); source=meta.with_name('store.db'); sid=meta.parent.name
+env=dict(os.environ,HOME=str(home),KIOKU_INDEX=str(home/'index.db'))
+def run(*args): return subprocess.check_output([binary,*args],env=env,text=True)
+def page(*args): return json.loads(run(args[0],'--json',*args[1:]) if args[0]=='show' else run('--json',*args))
+def fingerprints(): return {str(p.relative_to(root)): (hashlib.sha256(p.read_bytes()).hexdigest(),p.stat().st_mtime_ns,p.stat().st_size) for p in root.rglob('*') if p.is_file()}
+before=fingerprints()
+assert 'cursor: 3 messages' in run('index','--rebuild')
+assert '0 changed' in run('index')
+for query in ['cursorteatoken','魚池','日本語','한국어','cursoranswer','cursorlasttoken']:
+ hit=page('--harness','cursor',query)
+ assert hit['total']==1 and hit['hits'][0]['harness']=='cursor', hit
+ assert page(query)['total']==1 and page('--harness','claude',query)['total']==0
+for query in ['cursorbinaryhidden','cursorstatehidden','cursorsystemhidden','cursormalformedhidden','cursorimagehidden']:
+ assert page(query)['total']==0, query
+sessions=page('--sessions','--harness','cursor')
+assert sessions['total']==1 and sessions['sessions'][0]['harness']=='cursor', sessions
+shown=page('show',sid,'--all','--limit','20')
+assert shown['cwd']=='/work/cursor demo' and shown['project']=='cursor demo', shown
+assert shlex.split(shown['resume_cmd'])==['cursor-agent','--resume',sid], shown
+assert [m['role'] for m in shown['messages']]==['user','asst','user'], shown
+assert [m['text'] for m in shown['messages']]==['cursorteatoken 魚池 日本語 한국어','cursoranswer  second line','cursorlasttoken final line'], shown
+with sqlite3.connect(env['KIOKU_INDEX']) as db:
+ assert [r[0] for r in db.execute('SELECT text FROM messages ORDER BY idx')]==['cursorteatoken 魚池 日本語 한국어','cursoranswer\n\nsecond line','cursorlasttoken\nfinal line']
+ assert db.execute('SELECT started FROM sessions').fetchone()[0]=='2026-09-27T10:00:00Z'
+ timestamps=db.execute('SELECT ts FROM messages ORDER BY idx').fetchall()
+ from datetime import datetime
+ assert all(abs(datetime.fromisoformat(t[0].replace('Z','+00:00')).timestamp()-source.stat().st_mtime)<0.00001 for t in timestamps)
+assert fingerprints()==before
+pathlib.Path(artifact).write_text(json.dumps(shown,ensure_ascii=False)+'\n')
+print('PASS: rowid order, string/mixed text blocks, JSON-only messages, CJK, filters/sessions/show, metadata and DB-mtime timestamps; source bytes/mtime/size unchanged.')
+# A same-size message edit (mtime only) must replace, not append, the session.
+oldtime=source.stat().st_mtime_ns; oldsize=source.stat().st_size
+with sqlite3.connect(source) as db:
+ db.execute("UPDATE blobs SET data=? WHERE id='a'",(json.dumps({'role':'assistant','content':'cursoreditetoken'}),))
+assert source.stat().st_size==oldsize
+os.utime(source,ns=(oldtime+1000000000,oldtime+1000000000))
+assert page('cursoreditetoken')['total']==1 and page('cursoranswer')['total']==0
+assert page('show',sid,'--all')['session_total']==3
+# Growth with the old mtime also invalidates the cache (size-only change).
+oldtime=source.stat().st_mtime_ns; oldsize=source.stat().st_size
+with sqlite3.connect(source) as db:
+ db.execute('INSERT INTO blobs VALUES(?,?)',('growth',json.dumps({'role':'assistant','content':'cursorgrowthtoken '+('x'*20000)})))
+assert source.stat().st_size>oldsize
+os.utime(source,ns=(oldtime,oldtime))
+assert page('cursorgrowthtoken')['total']==1
+assert page('show',sid,'--all')['session_total']==4
+# Metadata mtime-only and size-only changes also reparse cwd/created time.
+oldsize=meta.stat().st_size; oldtime=meta.stat().st_mtime_ns
+meta.write_text(meta.read_text().replace('cursor demo','cursor edit'))
+assert meta.stat().st_size==oldsize
+os.utime(meta,ns=(oldtime+1000000000,oldtime+1000000000))
+assert page('show',sid)['cwd']=='/work/cursor edit'
+oldtime=meta.stat().st_mtime_ns
+meta.write_text(json.dumps({'cwd':'/work/cursor relocated project','createdAtMs':1790503260000}))
+os.utime(meta,ns=(oldtime,oldtime))
+assert page('show',sid)['cwd']=='/work/cursor relocated project'
+with sqlite3.connect(env['KIOKU_INDEX']) as db:
+ assert db.execute('SELECT started FROM sessions').fetchone()[0]=='2026-09-27T10:01:00Z'
+meta.write_text('{}')
+assert page('--sessions','--harness','cursor')['total']==0
+meta.write_text(json.dumps({'cwd':'/work/cursor demo','createdAtMs':1790503200000}))
+assert page('--sessions','--harness','cursor')['total']==1
+# Emptying the graph removes stale hits, and subsequent messages restore the session.
+with sqlite3.connect(source) as db: db.execute('DELETE FROM blobs')
+assert page('cursorteatoken')['total']==0
+with sqlite3.connect(source) as db:
+ db.execute('INSERT INTO blobs VALUES(?,?)',('final',json.dumps({'role':'user','content':'cursorfinaltoken'})))
+assert page('cursorfinaltoken')['total']==1 and '0 changed' in run('index')
+print('PASS: DB mtime/size and metadata changes trigger whole-session replacement; missing cwd and empty graphs remove stale hits.')
+# Explicit override, tilde, spaces, absent override with no default fallback.
+relocated=home/'relocated cursor'; shutil.copytree(root,relocated)
+for override,total in [('~/.cursor/chats',1),(str(relocated),1),(str(home/'missing'),0),('',1)]:
+ env['KIOKU_CURSOR_DIR']=override
+ assert page('--sessions','--harness','cursor')['total']==total
+ assert not (home/'missing').exists()
+before=fingerprints(); assert '0 changed' in run('index'); assert fingerprints()==before
+print('PASS: KIOKU_CURSOR_DIR override/tilde/spaces/missing-root behavior; repeat no-op scan leaves stores unchanged.')
+PY
+then record 'Cursor: JSON graph, rowid order, CJK, metadata, change detection, read-only' PASS $((SECONDS-start)) 'test/screens/cursor.txt and cursor.jsonl'; else record 'Cursor: JSON graph, rowid order, CJK, metadata, change detection, read-only' FAIL $((SECONDS-start)) "$(<"$SCREENS/cursor.txt")"; fi
+if command -v cursor-agent >/dev/null 2>&1; then
+  cursor_help=$(cursor-agent --help 2>&1)
+  if grep -q -- '--resume' <<<"$cursor_help"; then record 'Cursor resume flag verification' PASS 0 'cursor-agent --help lists --resume'; else record 'Cursor resume flag verification' FAIL 0 "$cursor_help"; fi
+else
+  skip 'Cursor resume flag verification' 'cursor-agent unavailable; cursor-agent --resume <id> is unverified locally'
+fi
 
 # OpenCode is DB-backed: both layouts, WAL visibility, whole-session replacement, no store writes.
 start=$SECONDS
@@ -643,6 +734,10 @@ for flag in '' --include-self; do
     grep -q '0 messages' <<<"$capture" || self_ok=0
     tmux send-keys -t "htool-$$" Tab; sleep .3
     capture=$(tmux capture-pane -t "htool-$$" -p 2>&1)
+    printf 'cursor --include-self:\n%s\n' "$capture" >> "$SCREENS/tui-self.txt"
+    grep -q '0 messages' <<<"$capture" || self_ok=0
+    tmux send-keys -t "htool-$$" Tab; sleep .3
+    capture=$(tmux capture-pane -t "htool-$$" -p 2>&1)
     printf 'all --include-self:\n%s\n' "$capture" >> "$SCREENS/tui-self.txt"
     grep -q '20 messages' <<<"$capture" || self_ok=0
   else
@@ -663,9 +758,9 @@ tmux new-session -d -x 120 -y 40 -s "htool-$$" "cd '$ROOT' && HOME='$GROKHOME' K
 tmux set-option -t "htool-$$" remain-on-exit on 2>/dev/null
 sleep 1; tmux capture-pane -t "htool-$$" -p > "$SCREENS/grok-tui.txt" 2>&1
 grep -q 'grok' "$SCREENS/grok-tui.txt" && grep -q '1 messages' "$SCREENS/grok-tui.txt" || grok_ok=0
-tmux send-keys -t "htool-$$" Tab; sleep .3; tmux send-keys -t "htool-$$" Tab; sleep .3; capture=$(tmux capture-pane -t "htool-$$" -p 2>&1)
+tmux send-keys -t "htool-$$" Tab; sleep .3; tmux send-keys -t "htool-$$" Tab; sleep .3; tmux send-keys -t "htool-$$" Tab; sleep .3; capture=$(tmux capture-pane -t "htool-$$" -p 2>&1)
 grep -q '1 messages' <<<"$capture" || grok_ok=0
-tmux send-keys -t "htool-$$" BTab; sleep .3; tmux send-keys -t "htool-$$" BTab; sleep .3; tmux send-keys -t "htool-$$" Enter; sleep .3
+tmux send-keys -t "htool-$$" BTab; sleep .3; tmux send-keys -t "htool-$$" BTab; sleep .3; tmux send-keys -t "htool-$$" BTab; sleep .3; tmux send-keys -t "htool-$$" Enter; sleep .3
 tmux capture-pane -t "htool-$$" -p -S -100 >> "$SCREENS/grok-tui.txt" 2>&1
 [[ $(tmux display-message -p -t "htool-$$" '#{pane_dead} #{pane_dead_status}') == '1 0' ]] || grok_ok=0
 grep -Fq "cd \"$GROKHOME/work/grok demo\"" "$SCREENS/grok-tui.txt" || grok_ok=0
@@ -694,7 +789,7 @@ if [[ $state == 1 ]] && ! grep -q 'kioku ▸' "$SCREENS/tui-after-ctrl-c.txt"; t
 
 # Stub agents and editor: assert exec argv/cwd and detached editor arguments.
 STUB="$TMP/stub"; mkdir -p "$STUB"; export STUBLOG="$TMP/stub.log"
-for tool in claude codex pi opencode zed; do cat > "$STUB/$tool" <<'SH'
+for tool in claude codex pi opencode cursor-agent zed; do cat > "$STUB/$tool" <<'SH'
 #!/bin/sh
 printf '%s|%s|%s\n' "$(basename "$0")" "$PWD" "$*" >> "$STUBLOG"
 SH
@@ -713,14 +808,42 @@ tmux set-option -t "htool-$$" remain-on-exit on 2>/dev/null
 sleep 1; tmux capture-pane -t "htool-$$" -p > "$SCREENS/opencode-tui.txt" 2>&1
 grep -q 'opencode opencode' "$SCREENS/opencode-tui.txt" && grep -q '1 messages' "$SCREENS/opencode-tui.txt" || opencode_ok=0
 tmux send-keys -t "htool-$$" Tab; sleep .3; capture=$(tmux capture-pane -t "htool-$$" -p 2>&1)
+grep -q '0 messages' <<<"$capture" || opencode_ok=0
+tmux send-keys -t "htool-$$" Tab; sleep .3; capture=$(tmux capture-pane -t "htool-$$" -p 2>&1)
 grep -q '1 messages' <<<"$capture" || opencode_ok=0
-tmux send-keys -t "htool-$$" BTab; sleep .3; tmux send-keys -t "htool-$$" Escape; sleep .2; tmux send-keys -t "htool-$$" Enter; sleep .6
+tmux send-keys -t "htool-$$" BTab; sleep .3; tmux send-keys -t "htool-$$" BTab; sleep .3; tmux send-keys -t "htool-$$" Escape; sleep .2; tmux send-keys -t "htool-$$" Enter; sleep .6
 expected="opencode|$OPHOME/work/opencode demo|--session oc-v1"
 grep -Fq "$expected" "$STUBLOG" 2>/dev/null || opencode_ok=0
 [[ $(tmux display-message -p -t "htool-$$" '#{pane_dead} #{pane_dead_status}') == '1 0' ]] || opencode_ok=0
 printf '\nResume stub: %s\n' "$expected" >> "$SCREENS/opencode-tui.txt"
 tmux kill-session -t "htool-$$" 2>/dev/null || :
 if ((opencode_ok)); then record 'OpenCode TUI: harness cycling and resume argv + cwd' PASS $((SECONDS-start)) 'test/screens/opencode-tui.txt'; else record 'OpenCode TUI: harness cycling and resume argv + cwd' FAIL $((SECONDS-start)) "$(<"$SCREENS/opencode-tui.txt")"; fi
+
+# Cursor is the last harness: Tab reaches all; Shift-Tab returns; Enter uses cwd and native ID.
+start=$SECONDS; cursor_ok=1; CURSORHOME=$(cd "$H/cursor-home" && pwd -P)
+python3 - "$CURSORHOME" <<'PY'
+import json,pathlib,sys
+home=pathlib.Path(sys.argv[1]); cwd=home/'work/cursor demo'; cwd.mkdir(parents=True)
+meta=next((home/'.cursor/chats').glob('*/666*/meta.json'))
+m=json.loads(meta.read_text()); m['cwd']=str(cwd); meta.write_text(json.dumps(m))
+PY
+tmux new-session -d -x 120 -y 40 -s "htool-$$" "cd '$ROOT' && HOME='$CURSORHOME' PATH='$PATH' STUBLOG='$STUBLOG' KIOKU_INDEX='$CURSORHOME/tui.db' KIOKU_THEME=light TERM=xterm-256color exec ./kioku --harness cursor cursorfinaltoken" 2>/dev/null
+tmux set-option -t "htool-$$" remain-on-exit on 2>/dev/null
+sleep 1; tmux capture-pane -t "htool-$$" -p > "$SCREENS/cursor-tui.txt" 2>&1
+grep -q 'cursor.*cursor demo' "$SCREENS/cursor-tui.txt" && grep -q '1 messages' "$SCREENS/cursor-tui.txt" || cursor_ok=0
+tmux send-keys -t "htool-$$" Tab; sleep .3; capture=$(tmux capture-pane -t "htool-$$" -p 2>&1)
+grep -q '1 messages' <<<"$capture" || cursor_ok=0
+tmux send-keys -t "htool-$$" Tab; sleep .3; capture=$(tmux capture-pane -t "htool-$$" -p 2>&1)
+grep -q '0 messages' <<<"$capture" || cursor_ok=0
+tmux send-keys -t "htool-$$" BTab; sleep .3; tmux send-keys -t "htool-$$" BTab; sleep .3; tmux send-keys -t "htool-$$" BTab; sleep .3; capture=$(tmux capture-pane -t "htool-$$" -p 2>&1)
+grep -q '0 messages' <<<"$capture" || cursor_ok=0
+tmux send-keys -t "htool-$$" Tab; sleep .3; tmux send-keys -t "htool-$$" Escape; sleep .2; tmux send-keys -t "htool-$$" Enter; sleep .6
+expected="cursor-agent|$CURSORHOME/work/cursor demo|--resume 66666666-6666-4666-8666-666666666666"
+grep -Fq "$expected" "$STUBLOG" 2>/dev/null || cursor_ok=0
+[[ $(tmux display-message -p -t "htool-$$" '#{pane_dead} #{pane_dead_status}') == '1 0' ]] || cursor_ok=0
+printf '\nResume stub: %s\n' "$expected" >> "$SCREENS/cursor-tui.txt"
+tmux kill-session -t "htool-$$" 2>/dev/null || :
+if ((cursor_ok)); then record 'Cursor TUI: harness cycling and resume argv + cwd' PASS $((SECONDS-start)) 'test/screens/cursor-tui.txt; real cursor-agent flag unverified if unavailable'; else record 'Cursor TUI: harness cycling and resume argv + cwd' FAIL $((SECONDS-start)) "$(<"$SCREENS/cursor-tui.txt")"; fi
 
 # Resume Claude: execute stub in real synthetic cwd after selecting the first hit.
 export KIOKU_INDEX="$H/index/resume.db"

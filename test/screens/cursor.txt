@@ -1,0 +1,3 @@
+PASS: rowid order, string/mixed text blocks, JSON-only messages, CJK, filters/sessions/show, metadata and DB-mtime timestamps; source bytes/mtime/size unchanged.
+PASS: DB mtime/size and metadata changes trigger whole-session replacement; missing cwd and empty graphs remove stale hits.
+PASS: KIOKU_CURSOR_DIR override/tilde/spaces/missing-root behavior; repeat no-op scan leaves stores unchanged.

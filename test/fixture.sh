@@ -135,6 +135,26 @@ sqlite3 "$opencode/v2.db" 'DROP TABLE session; DROP TABLE message; DROP TABLE pa
 cp "$opencode/opencode.db" "$opencode/minimal-v1.db"
 sqlite3 "$opencode/minimal-v1.db" 'DROP TABLE session_v2; DROP TABLE session_message; ALTER TABLE message RENAME TO old_message; CREATE TABLE message AS SELECT id,session_id,data FROM old_message; DROP TABLE old_message;'
 
+# Cursor CLI graph: only JSON message blobs are indexable; rowid, not id, is the order.
+cursor="$home/cursor-home/.cursor/chats/d41d8cd98f00b204e9800998ecf8427e/66666666-6666-4666-8666-666666666666"
+mkdir -p "$cursor" "${cursor%/*}/no-cwd"
+cat > "$cursor/meta.json" <<'JSON'
+{"cwd":"/work/cursor demo","title":"Cursor fixture","createdAtMs":1790503200000}
+JSON
+printf '%s\n' '{"title":"No cwd","createdAtMs":1790503200000}' > "${cursor%/*}/no-cwd/meta.json"
+sqlite3 "$cursor/store.db" <<'SQL'
+CREATE TABLE blobs(id TEXT PRIMARY KEY, data BLOB);
+INSERT INTO blobs VALUES('z',CAST('  {"role":"user","content":"cursorteatoken 魚池 日本語 한국어"}  ' AS BLOB));
+INSERT INTO blobs VALUES('binary',X'00017B22637572736F7262696E61727968696464656E22FF');
+INSERT INTO blobs VALUES('a',CAST('{"role":"assistant","content":["cursoranswer","",{"text":"second line"},{"type":"image","url":"cursorimagehidden"}]}' AS BLOB));
+INSERT INTO blobs VALUES('state',CAST('{"content":"cursorstatehidden","nodes":[]}' AS BLOB));
+INSERT INTO blobs VALUES('system',CAST('{"role":"system","content":"cursorsystemhidden"}' AS BLOB));
+INSERT INTO blobs VALUES('malformed',CAST('{"role":"user","content":"cursormalformedhidden"' AS BLOB));
+INSERT INTO blobs VALUES('m',CAST('{"role":"user","content":[{"text":"cursorlasttoken"},"final line"]}' AS BLOB));
+SQL
+cp "$cursor/store.db" "${cursor%/*}/no-cwd/store.db"
+printf '%s\n' 'IDE store is out of scope' > "$home/cursor-home/.cursor/state.vscdb"
+
 # Relocated copies exercise native config dirs, including spaces in paths.
 mkdir -p "$home/relocated/claude config" "$home/relocated/codex config" "$home/relocated/pi config"
 cp -R "$home/.claude/projects" "$home/relocated/claude config/projects"

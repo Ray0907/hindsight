@@ -20,7 +20,7 @@ import (
 func roots() map[string]string {
 	home := os.Getenv("HOME")
 	out := map[string]string{}
-	for _, p := range []struct{ h, env, config, child, rel string }{{"claude", "KIOKU_CLAUDE_DIR", "CLAUDE_CONFIG_DIR", "projects", ".claude/projects"}, {"codex", "KIOKU_CODEX_DIR", "CODEX_HOME", "sessions", ".codex/sessions"}, {"pi", "KIOKU_PI_DIR", "PI_CODING_AGENT_DIR", "sessions", ".pi/agent/sessions"}, {"grok", "KIOKU_GROK_DIR", "", "", ".grok/sessions"}} {
+	for _, p := range []struct{ h, env, config, child, rel string }{{"claude", "KIOKU_CLAUDE_DIR", "CLAUDE_CONFIG_DIR", "projects", ".claude/projects"}, {"codex", "KIOKU_CODEX_DIR", "CODEX_HOME", "sessions", ".codex/sessions"}, {"pi", "KIOKU_PI_DIR", "PI_CODING_AGENT_DIR", "sessions", ".pi/agent/sessions"}, {"grok", "KIOKU_GROK_DIR", "", "", ".grok/sessions"}, {"cursor", "KIOKU_CURSOR_DIR", "", "", ".cursor/chats"}} {
 		dir, child := os.Getenv(p.env), ""
 		if dir == "" {
 			dir, child = os.Getenv(p.config), p.child
@@ -250,7 +250,7 @@ func discover(db *sql.DB, rebuild bool) (map[string]string, map[string]int64, bo
 					}
 					return nil
 				}
-				if h == "grok" && d.Name() == "chat_history.jsonl" || h != "grok" && strings.HasSuffix(p, ".jsonl") {
+				if h == "cursor" && d.Name() == "meta.json" || h == "grok" && d.Name() == "chat_history.jsonl" || h != "grok" && h != "cursor" && strings.HasSuffix(p, ".jsonl") {
 					local[p] = h
 				}
 				return nil
@@ -303,7 +303,13 @@ func syncIndex(db *sql.DB, rebuild bool, progress func(int, int)) (syncStats, er
 		paths = append(paths, p)
 	}
 	sort.Strings(paths)
-	infos, failed := statPaths(paths)
+	statFiles := append([]string(nil), paths...)
+	for _, p := range paths {
+		if files[p] == "cursor" {
+			statFiles = append(statFiles, filepath.Join(filepath.Dir(p), "store.db"))
+		}
+	}
+	infos, failed := statPaths(statFiles)
 	stats.Skipped += failed
 	if migrating && stats.Skipped > 0 {
 		return stats, fmt.Errorf("index migration: %d sources could not be discovered or read", stats.Skipped)
@@ -400,6 +406,7 @@ func syncIndex(db *sql.DB, rebuild bool, progress func(int, int)) (syncStats, er
 			progress(i+1, len(paths))
 		}
 		src, dbSource := opSessions[p]
+		cursorSource := files[p] == "cursor"
 		mtime, size, inode, updated := int64(0), int64(0), int64(0), int64(0)
 		v, ok := old[p]
 		ok = ok && !rebuild // Failed OpenCode scans retain rows; other sources still rebuild.
@@ -419,11 +426,19 @@ func syncIndex(db *sql.DB, rebuild bool, progress func(int, int)) (syncStats, er
 			}
 			mtime, size = info.ModTime().UnixNano(), info.Size()
 			inode = int64(info.Sys().(*syscall.Stat_t).Ino)
-			if ok && v.mtime == mtime && v.size == size {
+			if cursorSource {
+				store := infos[filepath.Join(filepath.Dir(p), "store.db")]
+				if store == nil {
+					continue
+				}
+				// Cursor tracks both files: mtime/size are metadata; updated/inode are DB mtime/size.
+				updated, inode = store.ModTime().UnixNano(), store.Size()
+			}
+			if ok && v.mtime == mtime && v.size == size && (!cursorSource || v.updated == updated && v.inode == inode) {
 				continue
 			}
 		}
-		appendOnly := !dbSource && ok && v.inode == inode && v.offset > 0 && size > v.size && v.offset <= v.size
+		appendOnly := !dbSource && !cursorSource && ok && v.inode == inode && v.offset > 0 && size > v.size && v.offset <= v.size
 		var base session
 		startIdx := 0
 		offset := int64(0)
@@ -444,6 +459,8 @@ func syncIndex(db *sql.DB, rebuild bool, progress func(int, int)) (syncStats, er
 		var err error
 		if dbSource {
 			s, err = opencode.parse(src)
+		} else if cursorSource {
+			s, err = parseCursor(p, updated)
 		} else {
 			s, nextOffset, err = parseFile(p, files[p], offset, size, base, startIdx)
 		}
@@ -454,7 +471,7 @@ func syncIndex(db *sql.DB, rebuild bool, progress func(int, int)) (syncStats, er
 			}
 			stats.Skipped++
 			if errors.Is(err, errNoMessages) {
-				if dbSource || rebuild {
+				if dbSource || cursorSource || rebuild {
 					if e = removeSource(tx, p); e != nil {
 						return stats, e
 					}

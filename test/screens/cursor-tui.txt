@@ -1,0 +1,42 @@
+kioku ▸ cursorfinaltoken▌                                                                        1 messages · 1 sessions
+highlights none · press h in results to add
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+›▌ cursorfinaltoken                                                                          cursor  cursor demo      0m
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+▌ cursor demo  <fixture>/home/cursor-home/…   hit 1 of 1
+›  06:43 you   cursorfinaltoken
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+type to search   ↓/esc results   enter resume   tab agent
+
+Resume stub: cursor-agent|<fixture>/home/cursor-home/work/cursor demo|--resume 66666666-6666-4666-8666-666666666666
