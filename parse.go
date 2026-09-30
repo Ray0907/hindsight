@@ -268,7 +268,9 @@ func parseFile(path, h string, offset, size int64, base session, startIdx int) (
 							cmd := toolCommand(p["arguments"])
 							if t == "" {
 								t = toolCommand(p["input"])
-								cmd = t
+								if cmd == "" {
+									cmd = t
+								}
 							}
 							self := selfCommandRE.MatchString(cmd)
 							s.ToolCalls = append(s.ToolCalls, toolCall{str(p["call_id"]), name, self})
