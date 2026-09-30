@@ -23,12 +23,62 @@ h=pathlib.Path(sys.argv[1])
 for p in h.rglob('*.jsonl'):
  p.write_text(p.read_text().replace('/work/demo',str(h/'work/demo')))
 PY
+unset KIOKU_CLAUDE_DIR KIOKU_CODEX_DIR KIOKU_PI_DIR CLAUDE_CONFIG_DIR CODEX_HOME PI_CODING_AGENT_DIR
 export HOME="$H" KIOKU_INDEX="$H/index/index.db" KIOKU_THEME=light TERM=xterm-256color
 
 start=$SECONDS; out=$("$BIN" index --rebuild 2>&1); rc=$?
 if ((rc==0)) && grep -q 'claude: 5 messages' <<<"$out" && grep -q 'codex: 5 messages' <<<"$out" && grep -q 'pi: 5 messages' <<<"$out" && grep -q '3 files, 3 changed, 0 skipped' <<<"$out"; then record 'Index Claude/Codex/Pi real-format fixtures' PASS $((SECONDS-start)) "$out"; else record 'Index Claude/Codex/Pi real-format fixtures' FAIL $((SECONDS-start)) "$out"; fi
 start=$SECONDS; before=$(shasum "$H"/.claude/projects/*/*.jsonl "$H"/.codex/sessions/*/*/*/*.jsonl "$H"/.pi/agent/sessions/*/*.jsonl); out=$("$BIN" index 2>&1); rc=$?; after=$(shasum "$H"/.claude/projects/*/*.jsonl "$H"/.codex/sessions/*/*/*/*.jsonl "$H"/.pi/agent/sessions/*/*.jsonl)
 if ((rc==0)) && grep -q '0 changed' <<<"$out" && [[ $before == "$after" ]]; then record 'No-op incremental scan; transcript bytes unchanged' PASS $((SECONDS-start)) "$out"; else record 'No-op incremental scan; transcript bytes unchanged' FAIL $((SECONDS-start)) "$out"; fi
+# Native config dirs are below KIOKU overrides; missing explicit roots never fall back.
+start=$SECONDS
+if python3 - "$BIN" "$H" <<'PY' > "$SCREENS/env-dirs.txt" 2>&1
+import hashlib,json,os,pathlib,sqlite3,subprocess,sys
+binary,home=sys.argv[1:]; home=pathlib.Path(home)
+stores=[('claude','KIOKU_CLAUDE_DIR','CLAUDE_CONFIG_DIR','.claude/projects','projects'),('codex','KIOKU_CODEX_DIR','CODEX_HOME','.codex/sessions','sessions'),('pi','KIOKU_PI_DIR','PI_CODING_AGENT_DIR','.pi/agent/sessions','sessions')]
+def fingerprints():
+ return {str(p):hashlib.sha256(p.read_bytes()).hexdigest() for p in home.rglob('*.jsonl')}
+before=fingerprints()
+for harness,override,native,default,child in stores:
+ config=f'relocated/{harness} config'; relocated=home/config/child
+ cases=[
+  ('unset',{},home/default),
+  ('empty',{override:'',native:''},home/default),
+  ('native',{native:str(home/config)},relocated),
+  ('native tilde',{native:f'~/{config}'},relocated),
+  ('native tilde parent',{native:f'~/../{home.name}/{config}'},relocated),
+  ('empty override',{override:'',native:str(home/config)},relocated),
+  ('KIOKU wins',{override:str(home/default),native:str(home/config)},home/default),
+  ('KIOKU tilde wins',{override:f'~/{default}',native:str(home/config)},home/default),
+  ('KIOKU tilde parent',{override:f'~/../{home.name}/{default}',native:str(home/config)},home/default),
+  ('missing native',{native:str(home/'missing')},None),
+  ('missing KIOKU wins',{override:str(home/'missing'),native:str(home/config)},None),
+  ('empty native',{native:''},home/default),
+ ]
+ env=os.environ.copy(); env['KIOKU_INDEX']=str(home/'index'/f'env-{harness}.db')
+ for name,values,expected in cases:
+  current=env|values
+  index=subprocess.run([binary,'index'],env=current,text=True,capture_output=True)
+  assert index.returncode==0, index.stderr
+  search=subprocess.run([binary,'--json','--harness',harness,'recoverytoken'],env=current,text=True,capture_output=True)
+  assert search.returncode==0, search.stderr
+  page=json.loads(search.stdout)
+  print(json.dumps({'harness':harness,'case':name,'index':index.stdout.strip(),'search':page}),flush=True)
+  assert page['total']==(1 if expected else 0), (harness,name,page)
+  assert all(hit['harness']==harness for hit in page['hits']), page
+  with sqlite3.connect(current['KIOKU_INDEX']) as db:
+   paths=db.execute('SELECT harness,path FROM sessions').fetchall()
+  for other,_,_,other_default,_ in stores:
+   root=expected if other==harness else home/other_default
+   actual=[path for agent,path in paths if agent==other]
+   wanted=sorted(str(p) for p in root.rglob('*.jsonl')) if root else []
+   assert sorted(actual)==wanted, (harness,name,other,actual,wanted)
+   assert f'{other}: {5 if root else 0} messages' in index.stdout, index.stdout
+assert fingerprints()==before, 'transcript stores changed'
+print('36 cases: native/KIOKU precedence, empty vars, tilde (including parent traversal), missing roots, independent harnesses, root switching, read-only stores')
+PY
+then record 'Environment source-dir precedence and expansion' PASS $((SECONDS-start)) "$(tail -1 "$SCREENS/env-dirs.txt")"; else record 'Environment source-dir precedence and expansion' FAIL $((SECONDS-start)) "$(tail -5 "$SCREENS/env-dirs.txt")"; fi
+
 # New, modified, and deleted sources must sync without duplicate rows.
 orig=$(echo "$H"/.claude/projects/*/*.jsonl); clone="$H/.claude/projects/-work-demo/44444444-4444-4444-8444-444444444444.jsonl"
 python3 - "$orig" "$clone" <<'PY'

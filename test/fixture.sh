@@ -51,4 +51,10 @@ cat > "$pi/33333333-3333-4333-8333-333333333333.jsonl" <<'JSONL'
 {"type":"message","id":"33333333-3333-4333-8333-333333333305","parentId":"33333333-3333-4333-8333-333333333304","timestamp":"2026-09-27T10:12:00.000Z","message":{"role":"user","content":[{"type":"text","text":"Parser continues after malformed line: recoverytoken."}],"timestamp":1790503920000}}
 JSONL
 
+# Relocated copies exercise native config dirs, including spaces in paths.
+mkdir -p "$home/relocated/claude config" "$home/relocated/codex config" "$home/relocated/pi config"
+cp -R "$home/.claude/projects" "$home/relocated/claude config/projects"
+cp -R "$home/.codex/sessions" "$home/relocated/codex config/sessions"
+cp -R "$home/.pi/agent/sessions" "$home/relocated/pi config/sessions"
+
 printf '%s\n' "$home"

@@ -102,7 +102,15 @@ Editor resolution: `KIOKU_EDITOR`, then `VISUAL`, then the first available `zed`
 
 ## Data and privacy
 
-**Local-only and read-only:** transcript stores are never changed or uploaded. The only persistent writes are the search index under `$XDG_CACHE_HOME/kioku/index.db` (or `~/.cache/kioku/index.db`). Override it with `KIOKU_INDEX`; override source roots independently with `KIOKU_CLAUDE_DIR`, `KIOKU_CODEX_DIR`, `KIOKU_PI_DIR`. `$HOME` controls the default roots. Set `KIOKU_DEBUG_TIMING=1` for startup/sync/query/snippet/render timings on stderr.
+**Local-only and read-only:** transcript stores are never changed or uploaded. The only persistent writes are the search index under `$XDG_CACHE_HOME/kioku/index.db` (or `~/.cache/kioku/index.db`). Override it with `KIOKU_INDEX`. Source roots are selected independently, in this order (first nonempty value wins):
+
+| Harness | kioku override | Native config dir | Default |
+| --- | --- | --- | --- |
+| Claude Code | `KIOKU_CLAUDE_DIR` | `$CLAUDE_CONFIG_DIR/projects` | `~/.claude/projects` |
+| Codex | `KIOKU_CODEX_DIR` | `$CODEX_HOME/sessions` | `~/.codex/sessions` |
+| Pi | `KIOKU_PI_DIR` | `$PI_CODING_AGENT_DIR/sessions` | `~/.pi/agent/sessions` |
+
+Empty variables count as unset; a `~/` prefix expands to `$HOME`. kioku overrides point directly at the transcript root; native variables point at the parent config directory. A missing explicit root indexes nothing for that harness, without falling back to the default. Set `KIOKU_DEBUG_TIMING=1` for startup/sync/query/snippet/render timings on stderr.
 
 Search tokenization uses [fts5-cjk](https://github.com/Ray0907/fts5-cjk), statically linked under its original license in `internal/cjk/`.
 

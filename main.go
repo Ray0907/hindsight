@@ -51,7 +51,8 @@ JSON: {shown,total,total_sessions,hits,next_cursor,omitted_older} for search;
       Show message fields: time,role,text,hit,full (when --full).
 Environment: KIOKU_INDEX, KIOKU_CLAUDE_DIR, KIOKU_CODEX_DIR,
              KIOKU_PI_DIR, KIOKU_EDITOR, KIOKU_THEME=light|dark,
-             KIOKU_DEBUG_TIMING=1; HOME, XDG_CACHE_HOME, VISUAL.
+             KIOKU_DEBUG_TIMING=1; CLAUDE_CONFIG_DIR, CODEX_HOME,
+             PI_CODING_AGENT_DIR; HOME, XDG_CACHE_HOME, VISUAL.
 `
 
 func main() {

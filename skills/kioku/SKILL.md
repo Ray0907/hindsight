@@ -11,6 +11,8 @@ description: Use when the user refers to earlier work from any coding-agent sess
 
 Output is paged (10 per page) so it never floods your context. Go wide to narrow, and only fetch the next page when you need it.
 
+Source roots honor `KIOKU_CLAUDE_DIR`, `KIOKU_CODEX_DIR`, `KIOKU_PI_DIR` first, then `$CLAUDE_CONFIG_DIR/projects`, `$CODEX_HOME/sessions`, `$PI_CODING_AGENT_DIR/sessions`, then the default stores under `$HOME`. Empty variables are unset; `~/` expands to `$HOME`. A missing explicit root yields no sessions for that harness, not a fallback to its default store.
+
 ## Workflow
 
 0. **Already know the project?** From memory, the cwd, or the user: start with `-p <project>` on every command below. It is the fastest filter.

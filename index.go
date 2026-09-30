@@ -19,11 +19,18 @@ import (
 func roots() map[string]string {
 	home := os.Getenv("HOME")
 	out := map[string]string{}
-	for _, p := range []struct{ h, env, rel string }{{"claude", "KIOKU_CLAUDE_DIR", ".claude/projects"}, {"codex", "KIOKU_CODEX_DIR", ".codex/sessions"}, {"pi", "KIOKU_PI_DIR", ".pi/agent/sessions"}} {
-		out[p.h] = os.Getenv(p.env)
-		if out[p.h] == "" {
-			out[p.h] = filepath.Join(home, p.rel)
+	for _, p := range []struct{ h, env, config, child, rel string }{{"claude", "KIOKU_CLAUDE_DIR", "CLAUDE_CONFIG_DIR", "projects", ".claude/projects"}, {"codex", "KIOKU_CODEX_DIR", "CODEX_HOME", "sessions", ".codex/sessions"}, {"pi", "KIOKU_PI_DIR", "PI_CODING_AGENT_DIR", "sessions", ".pi/agent/sessions"}} {
+		dir, child := os.Getenv(p.env), ""
+		if dir == "" {
+			dir, child = os.Getenv(p.config), p.child
 		}
+		if dir == "" {
+			dir, child = home, p.rel
+		}
+		if strings.HasPrefix(dir, "~/") {
+			dir = filepath.Join(home, strings.TrimPrefix(dir, "~/"))
+		}
+		out[p.h] = filepath.Join(dir, child)
 	}
 	return out
 }
