@@ -2,4 +2,4 @@ PASS: search/CJK, --harness grok, --sessions, show, summary metadata, malformed-
 Resume: grok --help unavailable locally (command not found); only cd <cwd>, no invented resume flag.
 PASS: incremental append ingests only the tail and resolves tool_result id across sync boundaries.
 PASS: summary fallback, native ID fallback, empty sessions, exact history discovery, override/tilde/missing-root behavior.
-E2E suite (including make build): 65 PASS / 0 FAIL.
+E2E suite (including make build): 67 PASS / 0 FAIL.

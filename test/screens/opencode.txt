@@ -1,0 +1,8 @@
+kioku: opencode: <fixture>/home/opencode-home/unsupported.db: neither session nor session_v2 table found
+kioku: opencode: <fixture>/home/opencode-home/unsupported.db: neither session nor session_v2 table found
+PASS: v1/v2 search, CJK, harness filter, sessions/show, timestamps/model/cwd, message/part ordering, tools, reasoning/subagent exclusion, v2 precedence; source bytes unchanged.
+PASS: SHM fingerprint changed only in SQLite WAL-index recovery/reader coordination fields; frame/page maps and checkpoint position unchanged.
+PASS: SHM fingerprint changed only in SQLite WAL-index recovery/reader coordination fields; frame/page maps and checkpoint position unchanged.
+PASS: live WAL messages visible without checkpoint/write; latest message timestamp triggers sync, edits/empty/deleted sessions replace or prune rows, unchanged sessions are not reparsed, v2 subagents mask v1.
+PASS: v2-only and minimal v1 layouts; XDG/override/tilde/empty/missing paths; invalid schemas and transient load failures preserve OpenCode rows (including rebuild), other harnesses sync, recovery succeeds.
+E2E suite (including make build): 67 PASS / 0 FAIL.

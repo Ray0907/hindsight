@@ -287,7 +287,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if key == "tab" || key == "shift+tab" {
-			hs := []string{"all", "claude", "codex", "pi", "grok"}
+			hs := []string{"all", "claude", "codex", "pi", "grok", "opencode"}
 			for i, h := range hs {
 				if h == m.harness {
 					step := 1
@@ -495,7 +495,7 @@ func (m model) band(h string) string {
 		return m.pal.claude
 	case "codex":
 		return m.pal.codex
-	case "grok":
+	case "grok", "opencode":
 		return m.pal.muted
 	default:
 		return m.pal.pi
@@ -712,7 +712,7 @@ func (m model) View() string {
 			}
 			x := m.rows[idx]
 			selected := idx == m.sel
-			agW, pjW, ageW := 8, 12, 7
+			agW, pjW, ageW := max(8, len(x.Harness)+1), 12, 7
 			sw := max(5, w-agW-pjW-ageW-4)
 			sn := clip(displayInline(x.Snippet), sw)
 			cursor := " "
@@ -808,7 +808,7 @@ func (m model) selectionRow(s string, w int) string {
 }
 func (m model) pageLines(w int) []string {
 	if m.help {
-		return []string{"  focus    Bright zone takes keys; search dims results", "  query    space = AND · quotes = phrase · -word = exclude", "  ↓ / esc search to results    / results to search", "  ↑ ↓     previous / next message", "  n / N   next / previous hit in transcript", "  h / H   add highlighter / clear highlights", "  v       full transcript (hide hit list)", "  o       open directory in editor", "  y       copy resume command", "  enter   exit and resume in original cwd", "  tab     all · claude · codex · pi · grok", "  ctrl+c  quit"}
+		return []string{"  focus    Bright zone takes keys; search dims results", "  query    space = AND · quotes = phrase · -word = exclude", "  ↓ / esc search to results    / results to search", "  ↑ ↓     previous / next message", "  n / N   next / previous hit in transcript", "  h / H   add highlighter / clear highlights", "  v       full transcript (hide hit list)", "  o       open directory in editor", "  y       copy resume command", "  enter   exit and resume in original cwd", "  tab     all · claude · codex · pi · grok · opencode", "  ctrl+c  quit"}
 	}
 	if len(m.rows) == 0 {
 		return nil

@@ -84,6 +84,9 @@ INSERT INTO meta(schema_version) SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM meta);`
 		e = ensureColumn(db, "sources", "tool_calls", "TEXT DEFAULT '[]'")
 	}
 	if e == nil {
+		e = ensureColumn(db, "sources", "updated", "INTEGER DEFAULT 0")
+	}
+	if e == nil {
 		_, e = db.Exec(`UPDATE sessions SET msg_count=(SELECT count(*) FROM messages WHERE session_uid=sessions.uid) WHERE msg_count IS NULL`)
 	}
 	if e == nil {
@@ -305,6 +308,43 @@ func syncIndex(db *sql.DB, rebuild bool, progress func(int, int)) (syncStats, er
 	if migrating && stats.Skipped > 0 {
 		return stats, fmt.Errorf("index migration: %d sources could not be discovered or read", stats.Skipped)
 	}
+	// DB sources are discovered by session timestamps, never by file size/mtime.
+	opencode, err := loadOpencode()
+	opencodeFailed := err != nil
+	if opencodeFailed {
+		fmt.Fprintln(os.Stderr, "kioku: opencode:", err)
+		stats.Skipped++
+		// A failed scan is not evidence that previously indexed sessions disappeared.
+		rows, e := db.Query("SELECT path FROM sessions WHERE harness='opencode'")
+		if e != nil {
+			return stats, e
+		}
+		for rows.Next() {
+			var p string
+			if e = rows.Scan(&p); e != nil {
+				break
+			}
+			files[p] = "opencode"
+		}
+		if e == nil {
+			e = rows.Err()
+		}
+		rows.Close()
+		if e != nil {
+			return stats, e
+		}
+	}
+	opSessions := map[string]opencodeSession{}
+	if opencode != nil {
+		defer opencode.close()
+		opSessions = opencode.sessions
+		for p := range opSessions {
+			files[p] = "opencode"
+			paths = append(paths, p)
+		}
+		sort.Strings(paths)
+	}
+	stats.Files = len(files)
 	timing("sync_stat", started)
 	started = time.Now()
 	tx, e := db.Begin()
@@ -322,7 +362,7 @@ func syncIndex(db *sql.DB, rebuild bool, progress func(int, int)) (syncStats, er
 			}
 		}
 	}
-	if rebuild {
+	if rebuild && !opencodeFailed {
 		for _, table := range []string{"messages", "sessions", "sources"} {
 			if _, e = tx.Exec("DELETE FROM " + table); e != nil {
 				return stats, e
@@ -330,18 +370,18 @@ func syncIndex(db *sql.DB, rebuild bool, progress func(int, int)) (syncStats, er
 		}
 	}
 	type sourceState struct {
-		mtime, size, offset, inode int64
-		toolCalls                  string
+		mtime, size, offset, inode, updated int64
+		toolCalls                           string
 	}
 	old := map[string]sourceState{}
-	rows, e := tx.Query("SELECT path,mtime,size,offset,inode,tool_calls FROM sources")
+	rows, e := tx.Query("SELECT path,mtime,size,offset,inode,updated,tool_calls FROM sources")
 	if e != nil {
 		return stats, e
 	}
 	for rows.Next() {
 		var p string
 		var v sourceState
-		if rows.Scan(&p, &v.mtime, &v.size, &v.offset, &v.inode, &v.toolCalls) == nil {
+		if rows.Scan(&p, &v.mtime, &v.size, &v.offset, &v.inode, &v.updated, &v.toolCalls) == nil {
 			old[p] = v
 		}
 	}
@@ -359,17 +399,31 @@ func syncIndex(db *sql.DB, rebuild bool, progress func(int, int)) (syncStats, er
 		if progress != nil {
 			progress(i+1, len(paths))
 		}
-		info := infos[p]
-		if info == nil {
-			continue
-		}
-		mtime, size := info.ModTime().UnixNano(), info.Size()
-		inode := int64(info.Sys().(*syscall.Stat_t).Ino)
+		src, dbSource := opSessions[p]
+		mtime, size, inode, updated := int64(0), int64(0), int64(0), int64(0)
 		v, ok := old[p]
-		if ok && v.mtime == mtime && v.size == size {
-			continue
+		ok = ok && !rebuild // Failed OpenCode scans retain rows; other sources still rebuild.
+		if dbSource {
+			updated = src.updated
+			inode = 1 // DB sources use this slot for layout, so v1 -> v2 also reparses.
+			if src.v2 {
+				inode = 2
+			}
+			if ok && v.updated == updated && v.inode == inode {
+				continue
+			}
+		} else {
+			info := infos[p]
+			if info == nil {
+				continue
+			}
+			mtime, size = info.ModTime().UnixNano(), info.Size()
+			inode = int64(info.Sys().(*syscall.Stat_t).Ino)
+			if ok && v.mtime == mtime && v.size == size {
+				continue
+			}
 		}
-		appendOnly := ok && v.inode == inode && v.offset > 0 && size > v.size && v.offset <= v.size
+		appendOnly := !dbSource && ok && v.inode == inode && v.offset > 0 && size > v.size && v.offset <= v.size
 		var base session
 		startIdx := 0
 		offset := int64(0)
@@ -385,7 +439,14 @@ func syncIndex(db *sql.DB, rebuild bool, progress func(int, int)) (syncStats, er
 				startIdx = 0
 			}
 		}
-		s, nextOffset, err := parseFile(p, files[p], offset, size, base, startIdx)
+		var s session
+		var nextOffset int64
+		var err error
+		if dbSource {
+			s, err = opencode.parse(src)
+		} else {
+			s, nextOffset, err = parseFile(p, files[p], offset, size, base, startIdx)
+		}
 		if err != nil {
 			// No messages means a successful read with nothing to index.
 			if migrating && !errors.Is(err, errNoMessages) {
@@ -393,7 +454,12 @@ func syncIndex(db *sql.DB, rebuild bool, progress func(int, int)) (syncStats, er
 			}
 			stats.Skipped++
 			if errors.Is(err, errNoMessages) {
-				if _, e = tx.Exec("INSERT INTO sources(path,mtime,size,offset,inode) VALUES(?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET mtime=excluded.mtime,size=excluded.size,offset=excluded.offset,inode=excluded.inode", p, mtime, size, nextOffset, inode); e != nil {
+				if dbSource || rebuild {
+					if e = removeSource(tx, p); e != nil {
+						return stats, e
+					}
+				}
+				if _, e = tx.Exec("INSERT INTO sources(path,mtime,size,offset,inode,updated) VALUES(?,?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET mtime=excluded.mtime,size=excluded.size,offset=excluded.offset,inode=excluded.inode,updated=excluded.updated", p, mtime, size, nextOffset, inode, updated); e != nil {
 					return stats, e
 				}
 			}
@@ -420,7 +486,7 @@ func syncIndex(db *sql.DB, rebuild bool, progress func(int, int)) (syncStats, er
 		if err != nil {
 			return stats, err
 		}
-		if _, e = tx.Exec("INSERT INTO sources(path,mtime,size,offset,inode,tool_calls) VALUES(?,?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET mtime=excluded.mtime,size=excluded.size,offset=excluded.offset,inode=excluded.inode,tool_calls=excluded.tool_calls", p, mtime, size, nextOffset, inode, string(calls)); e != nil {
+		if _, e = tx.Exec("INSERT INTO sources(path,mtime,size,offset,inode,updated,tool_calls) VALUES(?,?,?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET mtime=excluded.mtime,size=excluded.size,offset=excluded.offset,inode=excluded.inode,updated=excluded.updated,tool_calls=excluded.tool_calls", p, mtime, size, nextOffset, inode, updated, string(calls)); e != nil {
 			return stats, e
 		}
 		stats.Changed++

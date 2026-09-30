@@ -111,6 +111,30 @@ for i,cmd in enumerate(['echo kioku mentionprobe','kioku-other mentionprobe','FO
 normal.write_text(''.join(json.dumps(r)+'\n' for r in rows))
 PY
 
+# Separate synthetic HOME keeps OpenCode fixtures out of the other harness counts.
+opencode="$home/opencode-home/.local/share/opencode"
+mkdir -p "$opencode"
+sqlite3 "$opencode/opencode.db" <<'SQL'
+CREATE TABLE session(id TEXT PRIMARY KEY, project_id TEXT, parent_id TEXT, directory TEXT, title TEXT, time_created INTEGER, time_updated INTEGER);
+CREATE TABLE message(id TEXT PRIMARY KEY, session_id TEXT, time_created INTEGER, data TEXT);
+CREATE INDEX message_session ON message(session_id, time_created);
+CREATE TABLE part(id TEXT PRIMARY KEY, message_id TEXT, session_id TEXT, data TEXT);
+CREATE INDEX part_message ON part(message_id, id);
+INSERT INTO session VALUES('oc-v1','p',NULL,'/work/opencode demo','v1',1790503200000,1790503202000),('oc-child','p','oc-v1','/work/opencode demo','child',1790503200000,1790503200000),('oc-both','p',NULL,'/work/opencode demo','old',1790503200000,1790503200000);
+INSERT INTO message VALUES('m2','oc-v1',1790503201000,'{"role":"assistant","modelID":"oc-model","time":{"created":1790503201000}}'),('m1','oc-v1',1790503200000,'{"role":"user","time":{"created":1790503200000}}'),('m3','oc-v1',1790503201000,'{"role":"assistant","time":{"created":1790503201000}}'),('child','oc-child',1790503200000,'{"role":"user"}'),('old','oc-both',1790503200000,'{"role":"user"}');
+INSERT INTO part VALUES('p1','m1','oc-v1','{"type":"text","text":"opencodevone 魚池"}'),('p4','m2','oc-v1','{"type":"tool","tool":"read","state":{"input":{"path":"ocnotes.txt"},"output":"ignored"}}'),('p2','m2','oc-v1','{"type":"reasoning","text":"ocreasoninghidden"}'),('p3','m2','oc-v1','{"type":"text","text":"ocanswer"}'),('p5','m2','oc-v1','{"type":"tool","tool":"bash","state":{"input":{"command":"printf octooltoken\nsecond line"}}}'),('p6','m2','oc-v1','{"type":"tool","tool":"read","state":{"output":"ocoutputtoken\nsecond line"}}'),('p7','m3','oc-v1','{"type":"text","text":"octietoken"}'),('child','child','oc-child','{"type":"text","text":"ocsubagenthidden"}'),('old','old','oc-both','{"type":"text","text":"ocv1duplicatehidden"}');
+CREATE TABLE session_v2(id TEXT PRIMARY KEY, project_id TEXT, parent_id TEXT, directory TEXT, title TEXT, time_created INTEGER, time_updated INTEGER);
+CREATE TABLE session_message(id TEXT PRIMARY KEY, session_id TEXT, type TEXT, seq INTEGER, time_created INTEGER, time_updated INTEGER, data TEXT);
+CREATE INDEX session_message_session ON session_message(session_id, time_created, time_updated);
+INSERT INTO session_v2 VALUES('oc-both','p',NULL,'/work/opencode v2','new',1790503200000,1790503202000),('oc-v2child','p','oc-both','/work/opencode v2','child',1790503200000,1790503200000);
+INSERT INTO session_message VALUES('z','oc-both','user',1,1790503200000,1790503200000,'{"text":"opencodevtwo"}'),('a','oc-both','assistant',2,1790503201000,1790503201000,'{"text":"ocv2answer"}'),('t','oc-both','tool-result',3,1790503202000,1790503202000,'{"text":"ocv2tool"}'),('r','oc-both','reasoning',4,1790503202000,1790503202000,'{"text":"ocv2reasonhidden"}'),('c','oc-v2child','user',1,1790503200000,1790503200000,'{"text":"ocv2childhidden"}');
+SQL
+# v2-only and minimal v1 schemas exercise independent layout detection.
+cp "$opencode/opencode.db" "$opencode/v2.db"
+sqlite3 "$opencode/v2.db" 'DROP TABLE session; DROP TABLE message; DROP TABLE part;'
+cp "$opencode/opencode.db" "$opencode/minimal-v1.db"
+sqlite3 "$opencode/minimal-v1.db" 'DROP TABLE session_v2; DROP TABLE session_message; ALTER TABLE message RENAME TO old_message; CREATE TABLE message AS SELECT id,session_id,data FROM old_message; DROP TABLE old_message;'
+
 # Relocated copies exercise native config dirs, including spaces in paths.
 mkdir -p "$home/relocated/claude config" "$home/relocated/codex config" "$home/relocated/pi config"
 cp -R "$home/.claude/projects" "$home/relocated/claude config/projects"
