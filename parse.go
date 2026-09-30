@@ -114,6 +114,9 @@ func parseFile(path, h string, offset, size int64, base session, startIdx int) (
 				s.Started = str(summary["created_at"])
 				s.Updated = s.Started
 				s.Model = str(summary["current_model_id"])
+				if s.Model == "" {
+					s.Model = str(summary["model_id"])
+				}
 			}
 		}
 	}
