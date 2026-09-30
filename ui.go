@@ -41,6 +41,7 @@ type model struct {
 	hitIndex                         map[int]bool
 	sel, cursor, width, height       int
 	limit                            int
+	allTime                          bool
 	focus, full, prompt, help, mouse bool
 	pens                             []pen
 	status                           string
@@ -119,8 +120,11 @@ type syncEnvelope struct {
 	ch <-chan syncMsg
 }
 
-func queryCmd(ctx context.Context, db *sql.DB, q, h string, projects []string, limit, rev int) tea.Cmd {
-	return func() tea.Msg { rows, e := search(ctx, db, q, h, projects, limit); return resultMsg{rev, rows, e} }
+func queryCmd(ctx context.Context, db *sql.DB, q, h string, projects []string, limit, rev int, allTime bool) tea.Cmd {
+	return func() tea.Msg {
+		rows, e := search(ctx, db, q, h, projects, limit, allTime)
+		return resultMsg{rev, rows, e}
+	}
 }
 func (m *model) requestQuery() tea.Cmd {
 	if m.cancel != nil {
@@ -134,7 +138,7 @@ func (m *model) requestQuery() tea.Cmd {
 	m.hitIndex = map[int]bool{}
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
-	return queryCmd(ctx, m.db, m.q, m.harness, m.projects, m.limit, m.revision)
+	return queryCmd(ctx, m.db, m.q, m.harness, m.projects, m.limit, m.revision, m.allTime)
 }
 func (m *model) requestLoad() tea.Cmd {
 	if m.loadCancel != nil {

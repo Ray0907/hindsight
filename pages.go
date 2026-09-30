@@ -17,10 +17,10 @@ import (
 )
 
 type pageKey struct {
-	Mode, Query, Harness, Ref         string
-	Projects                          []string
-	Limit, Context                    int
-	JSON, All, Full, NoMouse, Rebuild bool
+	Mode, Query, Harness, Ref                  string
+	Projects                                   []string
+	Limit, Context                             int
+	JSON, AllTime, All, Full, NoMouse, Rebuild bool
 }
 
 func (k pageKey) fingerprint() string {
@@ -106,6 +106,7 @@ type hitPage struct {
 	Shown         int          `json:"shown"`
 	Total         int          `json:"total"`
 	TotalSessions int          `json:"total_sessions"`
+	OmittedOlder  int          `json:"omitted_older,omitempty"`
 	Hits          []compactHit `json:"hits"`
 	NextCursor    string       `json:"next_cursor,omitempty"`
 }
@@ -126,10 +127,11 @@ type compactSession struct {
 	Topic   string     `json:"topic"`
 }
 type sessionPage struct {
-	Shown      int              `json:"shown"`
-	Total      int              `json:"total"`
-	Sessions   []compactSession `json:"sessions"`
-	NextCursor string           `json:"next_cursor,omitempty"`
+	Shown        int              `json:"shown"`
+	Total        int              `json:"total"`
+	OmittedOlder int              `json:"omitted_older,omitempty"`
+	Sessions     []compactSession `json:"sessions"`
+	NextCursor   string           `json:"next_cursor,omitempty"`
 }
 
 func shellQuote(s string) string {
@@ -152,6 +154,9 @@ func renderHits(p hitPage, asJSON bool, q string) error {
 	if len(p.Hits) > 0 {
 		fmt.Fprintf(output, "expand: kioku show %s --query %s\n", p.Hits[0].Ref, shellQuote(q))
 	}
+	if p.OmittedOlder > 0 {
+		fmt.Fprintf(output, "%d older matches omitted (--all-time)\n", p.OmittedOlder)
+	}
 	return nil
 }
 func renderSessions(p sessionPage, asJSON bool) error {
@@ -166,27 +171,20 @@ func renderSessions(p sessionPage, asJSON bool) error {
 		fmt.Fprintln(output, "cursor: "+p.NextCursor)
 	}
 	fmt.Fprintln(output, "expand: kioku show <session-id>")
+	if p.OmittedOlder > 0 {
+		fmt.Fprintf(output, "%d older matches omitted (--all-time)\n", p.OmittedOlder)
+	}
 	return nil
 }
 
 // The same FTS predicate (including the short-prefix date bound) feeds counts and pages.
-func matchSource(ctx context.Context, db *sql.DB, q, harness string, projects, names []string) (string, []any, error) {
+func matchSource(ctx context.Context, db *sql.DB, q, harness string, projects, names []string, allTime bool) (string, []any, int, error) {
 	from := `FROM messages_fts JOIN messages m ON m.id=messages_fts.rowid `
 	if harness != "" && harness != "all" || len(projects) > 0 {
 		from += `JOIN sessions s ON s.uid=m.session_uid `
 	}
 	from += `WHERE messages_fts MATCH ? `
 	args := []any{toFTS(q)}
-	if shortLatin(q) {
-		var latest string
-		if e := db.QueryRowContext(ctx, `SELECT max(ts) FROM messages`).Scan(&latest); e != nil {
-			return "", nil, e
-		}
-		if t, e := time.Parse(time.RFC3339Nano, latest); e == nil {
-			from += `AND m.ts>=? `
-			args = append(args, t.AddDate(0, 0, -7).UTC().Format(time.RFC3339Nano))
-		}
-	}
 	if harness != "" && harness != "all" {
 		from += `AND s.harness=? `
 		args = append(args, harness)
@@ -194,7 +192,22 @@ func matchSource(ctx context.Context, db *sql.DB, q, harness string, projects, n
 	clause, values := projectPredicate(projects, names)
 	from += clause
 	args = append(args, values...)
-	return from, args, nil
+	omitted := 0
+	if shortLatin(q) && !allTime {
+		var latest string
+		if e := db.QueryRowContext(ctx, `SELECT coalesce(max(ts),'') FROM messages`).Scan(&latest); e != nil {
+			return "", nil, 0, e
+		}
+		if t, e := time.Parse(time.RFC3339Nano, latest); e == nil {
+			cutoff := t.AddDate(0, 0, -7).UTC().Format(time.RFC3339Nano)
+			if e := db.QueryRowContext(ctx, `SELECT count(*) `+from+`AND m.ts<?`, append(args, cutoff)...).Scan(&omitted); e != nil {
+				return "", nil, 0, e
+			}
+			from += `AND m.ts>=? `
+			args = append(args, cutoff)
+		}
+	}
+	return from, args, omitted, nil
 }
 func fetchPageHits(ctx context.Context, db *sql.DB, query string, args ...any) ([]hit, error) {
 	rows, e := db.QueryContext(ctx, query, args...)
@@ -248,10 +261,11 @@ func compactSearch(ctx context.Context, db *sql.DB, k pageKey, offset int) (hitP
 			}
 		}
 	} else {
-		from, args, e := matchSource(ctx, db, q, harness, k.Projects, names)
+		from, args, omitted, e := matchSource(ctx, db, q, harness, k.Projects, names, k.AllTime)
 		if e != nil {
 			return p, e
 		}
+		p.OmittedOlder = omitted
 		var conversations int
 		if e = db.QueryRowContext(ctx, `SELECT count(*),coalesce(sum(m.role!='tool'),0),count(DISTINCT m.session_uid) `+from, args...).Scan(&p.Total, &conversations, &p.TotalSessions); e != nil {
 			return p, e
@@ -367,10 +381,11 @@ func compactSessions(ctx context.Context, db *sql.DB, k pageKey, offset int) (se
 		}
 		query = `SELECT s.uid,s.harness,s.project,m.ts,m.text,1,m.idx,(m.role='user'),(m.role='asst'),(m.role='tool') ` + from + `ORDER BY (m.role='tool'),m.ts DESC,m.id DESC LIMIT ? OFFSET ?`
 	} else {
-		from, values, e := matchSource(ctx, db, q, harness, k.Projects, names)
+		from, values, omitted, e := matchSource(ctx, db, q, harness, k.Projects, names, k.AllTime)
 		if e != nil {
 			return p, e
 		}
+		p.OmittedOlder = omitted
 		args = values
 		if e = db.QueryRowContext(ctx, `SELECT count(DISTINCT m.session_uid) `+from, args...).Scan(&p.Total); e != nil {
 			return p, e

@@ -32,13 +32,18 @@ Flags: --json (one JSON page), --limit N (default 10 for pages, 300 for TUI),
        --cursor TOKEN (next page), --harness all|claude|codex|pi,
        --project NAME, -p NAME (repeatable; project basename, case-insensitive),
        --context N (show: before/after, default 3), --query Q (center show hit),
+       --all-time (search: include older short-prefix matches),
        --all (show: whole session), --full (show: untruncated hit),
        --no-mouse, --rebuild (index), --version, --help, -h.
 Query: space means AND; "black tea" is a phrase; -word excludes;
        bare words are prefixes. Use -- to search flag-like text:
        kioku -- --help (or kioku '"help"' for the word help).
-JSON: {shown,total,total_sessions,hits,next_cursor} for search;
-      {shown,total,sessions,next_cursor} for --sessions;
+       Single unquoted 1-2 letter Latin prefixes search the 7 days before
+       the index's latest timestamp; --all-time removes this restriction.
+       Text reports N older matches omitted (--all-time) when applicable.
+JSON: {shown,total,total_sessions,hits,next_cursor,omitted_older} for search;
+      {shown,total,sessions,next_cursor,omitted_older} for --sessions;
+      omitted_older counts excluded messages and appears only when nonzero;
       {harness,project,topic,cwd,date,resume_cmd,start,end,session_total,hit_index,messages,next_cursor} for show.
       Hit fields: ref,harness,project,age,role,snippet.
       Session fields: ref,harness,project,age,hits,roles{you,asst,tool},best_ref,best,topic.
@@ -92,6 +97,7 @@ func run() error {
 	cursor := fs.String("cursor", "", "next page token")
 	showQuery := fs.String("query", "", "locate the hit in show")
 	contextSize := fs.Int("context", 3, "messages before and after")
+	allTime := fs.Bool("all-time", false, "include older short-prefix matches")
 	all := fs.Bool("all", false, "show full session")
 	full := fs.Bool("full", false, "show selected message without truncation")
 	sessions := fs.Bool("sessions", false, "group by session")
@@ -139,7 +145,7 @@ func run() error {
 			continue
 		}
 		switch a {
-		case "--rebuild", "--json", "--no-mouse", "--version", "--sessions", "--all", "--full":
+		case "--rebuild", "--json", "--no-mouse", "--version", "--sessions", "--all-time", "--all", "--full":
 			if e := fs.Parse([]string{a}); e != nil {
 				return e
 			}
@@ -224,7 +230,7 @@ func run() error {
 			mode = "show"
 			q = *showQuery
 		}
-		key := pageKey{Mode: mode, Query: q, Harness: *harness, Projects: projects, Limit: *limit, Context: *contextSize, JSON: *jsonFlag, All: *all, Full: *full, NoMouse: *noMouse, Rebuild: *rebuild}
+		key := pageKey{Mode: mode, Query: q, Harness: *harness, Projects: projects, Limit: *limit, Context: *contextSize, JSON: *jsonFlag, AllTime: *allTime, All: *all, Full: *full, NoMouse: *noMouse, Rebuild: *rebuild}
 		if show {
 			key.Ref = words[0]
 		}
@@ -254,11 +260,12 @@ func run() error {
 			return renderHits(page, *jsonFlag, q)
 		}
 	}
-	rows, e := search(context.Background(), db, q, *harness, projects, *limit)
+	rows, e := search(context.Background(), db, q, *harness, projects, *limit, *allTime)
 	if e != nil {
 		return e
 	}
 	m := newModel(db, q, *harness, projects, rows, !*noMouse, *limit)
+	m.allTime = *allTime
 	options := []tea.ProgramOption{tea.WithAltScreen()}
 	if !*noMouse {
 		options = append(options, tea.WithMouseCellMotion())

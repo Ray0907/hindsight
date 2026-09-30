@@ -1,9 +1,9 @@
 kioku ▸ cutprobe▌                                                                                3 messages · 3 sessions
 highlights none · press h in results to add
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
-›▌ cutprobe alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu…           pi      demo            21h
- ▌ cutprobe alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu…           codex   demo            21h
- ▌ cutprobe alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu…           claude  demo            21h
+›▌ cutprobe alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu…           pi      demo             2d
+ ▌ cutprobe alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu…           codex   demo             2d
+ ▌ cutprobe alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu…           claude  demo             2d
 
 
 

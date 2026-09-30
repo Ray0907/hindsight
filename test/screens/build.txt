@@ -1,1 +1,1 @@
-go build -tags sqlite_fts5 -ldflags "-s -w -X main.version=v0.1.2-6-g1e5a889-dirty" -o kioku .
+go build -tags sqlite_fts5 -ldflags "-s -w -X main.version=v0.1.2-9-g2cabf8d-dirty" -o kioku .

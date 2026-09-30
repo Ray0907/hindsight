@@ -316,7 +316,7 @@ func newestMatches(ctx context.Context, db *sql.DB, match, harness string, proje
 	}
 }
 
-func search(ctx context.Context, db *sql.DB, q, harness string, projects []string, limit int) ([]hit, error) {
+func search(ctx context.Context, db *sql.DB, q, harness string, projects []string, limit int, allTime bool) ([]hit, error) {
 	match := toFTS(q)
 	names, err := matchingProjects(ctx, db, projects)
 	if err != nil {
@@ -387,7 +387,7 @@ func search(ctx context.Context, db *sql.DB, q, harness string, projects []strin
 		}
 		sqlq += `WHERE messages_fts MATCH ? `
 		args = append(args, match)
-		if shortLatin(q) {
+		if shortLatin(q) && !allTime {
 			var latest string
 			if e := db.QueryRowContext(ctx, "SELECT max(ts) FROM messages").Scan(&latest); e != nil {
 				return nil, e

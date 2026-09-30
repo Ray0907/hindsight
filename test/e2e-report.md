@@ -1,15 +1,16 @@
 # E2E report
 
-Run: 2026-09-28 08:05:24 UTC
+Run: 2026-09-30 00:26:04 UTC
 
 | Check | Result | Time | Details |
 |---|---:|---:|---|
 | make build (sqlite_fts5) | PASS | 0s | built ./kioku |
-| Index Claude/Codex/Pi real-format fixtures | PASS | 0s | claude: 5 messages codex: 5 messages pi: 5 messages 3 files, 3 changed, 0 skipped |
+| Index Claude/Codex/Pi real-format fixtures | PASS | 1s | claude: 5 messages codex: 5 messages pi: 5 messages 3 files, 3 changed, 0 skipped |
 | No-op incremental scan; transcript bytes unchanged | PASS | 0s | claude: 5 messages codex: 5 messages pi: 5 messages 3 files, 0 changed, 0 skipped |
 | Incremental sync adds new file | PASS | 0s | claude: 11 messages codex: 5 messages pi: 5 messages 4 files, 1 changed, 0 skipped |
 | Changed source is replaced, not duplicated | PASS | 0s | claude: 11 messages codex: 5 messages pi: 5 messages 4 files, 1 changed, 0 skipped |
 | Deleted source is removed from index | PASS | 0s | claude: 5 messages codex: 5 messages pi: 5 messages 3 files, 0 changed, 0 skipped |
+| Short-prefix omitted footer and --all-time | PASS | 0s | text/JSON hits and sessions, inclusive 7-day boundary, --all-time, filters, and cursors checked |
 | Tool-order fixture indexed | PASS | 0s | claude: 9 messages codex: 5 messages pi: 5 messages 4 files, 1 changed, 0 skipped |
 | Conversation hits precede matching tool row in JSON order | PASS | 0s | roles=['asst', 'user', 'tool'] |
 | Tool-only match remains searchable | PASS | 0s |  |
@@ -22,7 +23,7 @@ Run: 2026-09-28 08:05:24 UTC
 | show --all paginates the whole session | PASS | 3s | all 23 messages returned once across show --all pages |
 | kioku --help exits with usage before search/index | PASS | 0s |  |
 | query: snapshot (contains) | PASS | 0s |  |
-| query: recoverytoken (contains) | PASS | 0s |  |
+| query: recoverytoken (contains) | PASS | 1s |  |
 | query: resum (contains) | PASS | 0s |  |
 | query: sume (empty) | PASS | 0s |  |
 | query: "tea black" (empty) | PASS | 0s |  |
@@ -37,7 +38,7 @@ Run: 2026-09-28 08:05:24 UTC
 | query: 日本語 (contains) | PASS | 0s |  |
 | query: 한국어 (contains) | PASS | 0s |  |
 | query: --flag (empty) | PASS | 0s |  |
-| CLI --version | PASS | 0s | v0.1.2-6-g1e5a889-dirty |
+| CLI --version | PASS | 0s | v0.1.2-9-g2cabf8d-dirty |
 | Empty query lists recent messages as compact JSON | PASS | 0s | 5 rows |
 | Malformed quote query does not crash | PASS | 0s |  |
 | Compact JSON search-page schema | PASS | 0s | 6 hits |
@@ -58,11 +59,11 @@ Run: 2026-09-28 08:05:24 UTC
 | Editor launch leaves TUI alive | PASS | 0s |  |
 | TUI n/N visits matching tool hit | PASS | 0s | both directions retain the tool hit in transcript |
 | Hit-list truncation: ellipsis + whole Latin words | PASS | 0s | 3 hit rows end their clipped snippet in ellipsis; Latin token intact or omitted |
-| Performance: 2k sessions / 200k messages (20 varied queries) | PASS | 0s | index=4545.04ms queries=20 median=22.67ms p95=83.83ms slowest=[{"query":"-neutral","ms":86.66,"timing":"timing startup=0.81ms\ntiming sync_walk=0.84ms\ntiming sync_stat=2.86ms\ntiming sync_sources=1.12ms\ntiming sync_changes=0.13ms\ntiming sync_counts=0.28ms\ntiming sync=5.25ms"},{"query":"-perfneedle","ms":83.83,"timing":"timing startup=0.84ms\ntiming sync_walk=0.75ms\ntiming sync_stat=2.75ms\ntiming sync_sources=1.10ms\ntiming sync_changes=0.11ms\ntiming sync_counts=0.26ms\ntiming sync=4.99ms"},{"query":"\"synthetic message\"","ms":54.33,"timing":"timing startup=0.92ms\ntiming sync_walk=0.76ms\ntiming sync_stat=2.50ms\ntiming sync_sources=1.08ms\ntiming sync_changes=0.11ms\ntiming sync_counts=0.25ms\ntiming sync=4.72ms"}] |
+| Performance: 2k sessions / 200k messages (20 varied queries) | PASS | 0s | index=4799.0ms queries=20 median=22.72ms p95=88.59ms slowest=[{"query":"-neutral","ms":89.93,"timing":"timing startup=0.95ms\ntiming sync_walk=0.85ms\ntiming sync_stat=2.75ms\ntiming sync_sources=1.22ms\ntiming sync_changes=0.11ms\ntiming sync_counts=0.27ms\ntiming sync=5.23ms"},{"query":"-perfneedle","ms":88.59,"timing":"timing startup=0.91ms\ntiming sync_walk=0.76ms\ntiming sync_stat=2.96ms\ntiming sync_sources=1.21ms\ntiming sync_changes=0.11ms\ntiming sync_counts=0.27ms\ntiming sync=5.33ms"},{"query":"\"synthetic message\"","ms":55.07,"timing":"timing startup=0.98ms\ntiming sync_walk=0.84ms\ntiming sync_stat=2.71ms\ntiming sync_sources=1.19ms\ntiming sync_changes=0.13ms\ntiming sync_counts=0.26ms\ntiming sync=5.15ms"}] |
 | Search semantics: common term is ranked by message time, not insertion order | PASS | 0s | 10 rows; harnesses=['claude', 'codex']; newest=synthetic NEWEST_MATCH_MARKER |
-| Append sync: next CLI query finds new line; only tail parsed | PASS | 0s | sync_changes=0.31ms; claude: 2 messages codex: 200001 messages pi: 1 messages 2002 files, 0 changed, 0 skipped |
-| Partial final line is withheld until newline | PASS | 0s | timing startup=0.87ms timing sync_walk=0.73ms timing sync_stat=2.36ms timing sync_sources=1.11ms timing sync_changes=0.10ms timing sync_counts=0.27ms timing sync=4.61ms |
+| Append sync: next CLI query finds new line; only tail parsed | PASS | 0s | sync_changes=0.29ms; claude: 2 messages codex: 200001 messages pi: 1 messages 2002 files, 0 changed, 0 skipped |
+| Partial final line is withheld until newline | PASS | 0s | timing startup=0.92ms timing sync_walk=0.79ms timing sync_stat=2.81ms timing sync_sources=1.20ms timing sync_changes=0.11ms timing sync_counts=0.26ms timing sync=5.20ms |
 | Partial line is re-read and indexed when completed | PASS | 0s | claude: 2 messages codex: 200002 messages pi: 1 messages 2002 files, 0 changed, 0 skipped |
 | Real stores: read-only independent lower-bound sanity | SKIP | 0s | Set KIOKU_E2E_REAL=1 to opt in to reading this machine’s ~/.claude, ~/.codex, and ~/.pi stores. |
 
-**Summary:** 59 PASS, 0 FAIL.
+**Summary:** 60 PASS, 0 FAIL.
