@@ -230,7 +230,7 @@ func run() error {
 			mode = "show"
 			q = *showQuery
 		}
-		key := pageKey{Mode: mode, Query: q, Harness: *harness, Projects: projects, Limit: *limit, Context: *contextSize, JSON: *jsonFlag, AllTime: *allTime, All: *all, Full: *full, NoMouse: *noMouse, Rebuild: *rebuild}
+		key := pageKey{Mode: mode, Query: q, Harness: *harness, Projects: projects, Limit: *limit, Context: *contextSize, JSON: *jsonFlag, AllTime: *allTime && shortLatin(q), All: *all, Full: *full, NoMouse: *noMouse, Rebuild: *rebuild}
 		if show {
 			key.Ref = words[0]
 		}

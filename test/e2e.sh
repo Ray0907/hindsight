@@ -83,6 +83,12 @@ next_page=json.loads(run('--json','--limit','1','--cursor',page['next_cursor'],'
 assert next_page['shown']==1 and next_page['omitted_older']==2, next_page
 mismatch=subprocess.run([binary,'--json','--limit','1','--cursor',page['next_cursor'],'--all-time','qw'],env=env,text=True,capture_output=True)
 assert mismatch.returncode!=0 and 'cursor' in mismatch.stderr, mismatch
+for mode in [[],['--sessions']]:
+ for flags,toggled in [([],['--all-time']),(['--all-time'],[])]:
+  page=json.loads(run('--json','--limit','1',*mode,*flags,'qword'))
+  expected=json.loads(run('--json','--limit','1',*mode,*flags,'--cursor',page['next_cursor'],'qword'))
+  next_page=json.loads(run('--json','--limit','1',*mode,*toggled,'--cursor',page['next_cursor'],'qword'))
+  assert next_page==expected, (next_page,expected)
 assert '--all-time' in run('--help') and 'omitted_older' in run('--help')
 print('text/JSON hits and sessions, inclusive 7-day boundary, --all-time, filters, and cursors checked')
 PY
