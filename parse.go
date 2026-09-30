@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -96,6 +97,25 @@ func parseFile(path, h string, offset, size int64, base session, startIdx int) (
 	s := base
 	if offset == 0 {
 		s = session{UID: h + ":" + path, Harness: h, Path: path, NativeID: strings.TrimSuffix(filepath.Base(path), ".jsonl")}
+		if h == "grok" {
+			dir := filepath.Dir(path)
+			s.NativeID = filepath.Base(dir)
+			s.CWD, _ = url.PathUnescape(filepath.Base(filepath.Dir(dir)))
+			data, _ := os.ReadFile(filepath.Join(dir, "summary.json"))
+			var summary map[string]any
+			if json.Unmarshal(data, &summary) == nil {
+				info := obj(summary["info"])
+				if id := str(info["id"]); id != "" {
+					s.NativeID = id
+				}
+				if cwd := str(info["cwd"]); cwd != "" {
+					s.CWD = cwd
+				}
+				s.Started = str(summary["created_at"])
+				s.Updated = s.Started
+				s.Model = str(summary["current_model_id"])
+			}
+		}
 	}
 	s.Messages = nil
 	r := bufio.NewReader(io.LimitReader(f, size-offset))
@@ -257,6 +277,43 @@ func parseFile(path, h string, offset, size int64, base session, startIdx int) (
 							call := resultCall(str(p["call_id"]), false)
 							add(ts, "tool", call.Name+" · "+first(str(p["output"])), call.Self)
 						}
+					}
+				case "grok":
+					content := str(d["content"])
+					if content == "" {
+						content = strings.Join(textParts(d["content"], "text"), "\n")
+					}
+					switch str(d["type"]) {
+					case "user":
+						add(ts, "user", content)
+					case "assistant":
+						if model := str(d["model_id"]); model != "" {
+							s.Model = model
+						}
+						add(ts, "asst", content)
+						for _, part := range arr(d["tool_calls"]) {
+							x := obj(part)
+							name := str(x["name"])
+							input := x["arguments"]
+							if input == nil {
+								input = x["input"]
+							}
+							t := str(input)
+							if t == "" && input != nil {
+								data, _ := json.Marshal(input)
+								t = string(data)
+							}
+							self := selfCommandRE.MatchString(toolCommand(input))
+							s.ToolCalls = append(s.ToolCalls, toolCall{str(x["id"]), name, self})
+							add(ts, "tool", name+" · "+first(t), self)
+						}
+					case "tool_result":
+						id := str(d["tool_call_id"])
+						if id == "" {
+							id = str(d["id"])
+						}
+						call := resultCall(id, false)
+						add(ts, "tool", call.Name+" · "+first(content), call.Self)
 					}
 				case "pi":
 					switch str(d["type"]) {

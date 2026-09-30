@@ -80,6 +80,47 @@ highlights none · press h in results to add
 
 ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 type to search   ↓/esc results   enter resume   tab agent
+grok --include-self:
+kioku ▸ secretword▌                                                                              0 messages · 0 sessions
+highlights none · press h in results to add
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ No message contains all of these words. Drop a word or remove the quotes.
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+type to search   ↓/esc results   enter resume   tab agent
 all --include-self:
 kioku ▸ secretword▌                                                                             20 messages · 4 sessions
 highlights none · press h in results to add

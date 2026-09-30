@@ -71,12 +71,14 @@ type hit struct {
 	ID        int64  `json:"-"`
 }
 
-func resumeCmd(h, id, path string) string {
+func resumeCmd(h, id, path, cwd string) string {
 	switch h {
 	case "claude":
 		return "claude --resume " + id
 	case "codex":
 		return "codex resume " + id
+	case "grok":
+		return "cd " + shellQuote(cwd)
 	default:
 		return "pi --session " + path
 	}
@@ -440,7 +442,7 @@ func search(ctx context.Context, db *sql.DB, q, harness string, projects []strin
 			}
 		}
 		out[i].Snippet = snippet(out[i].Text, ts)
-		out[i].ResumeCmd = resumeCmd(out[i].Harness, out[i].SessionID, out[i].Path)
+		out[i].ResumeCmd = resumeCmd(out[i].Harness, out[i].SessionID, out[i].Path, out[i].CWD)
 	}
 	timing("snippet", started)
 	return out, nil

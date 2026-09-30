@@ -20,7 +20,7 @@ import (
 func roots() map[string]string {
 	home := os.Getenv("HOME")
 	out := map[string]string{}
-	for _, p := range []struct{ h, env, config, child, rel string }{{"claude", "KIOKU_CLAUDE_DIR", "CLAUDE_CONFIG_DIR", "projects", ".claude/projects"}, {"codex", "KIOKU_CODEX_DIR", "CODEX_HOME", "sessions", ".codex/sessions"}, {"pi", "KIOKU_PI_DIR", "PI_CODING_AGENT_DIR", "sessions", ".pi/agent/sessions"}} {
+	for _, p := range []struct{ h, env, config, child, rel string }{{"claude", "KIOKU_CLAUDE_DIR", "CLAUDE_CONFIG_DIR", "projects", ".claude/projects"}, {"codex", "KIOKU_CODEX_DIR", "CODEX_HOME", "sessions", ".codex/sessions"}, {"pi", "KIOKU_PI_DIR", "PI_CODING_AGENT_DIR", "sessions", ".pi/agent/sessions"}, {"grok", "KIOKU_GROK_DIR", "", "", ".grok/sessions"}} {
 		dir, child := os.Getenv(p.env), ""
 		if dir == "" {
 			dir, child = os.Getenv(p.config), p.child
@@ -247,7 +247,7 @@ func discover(db *sql.DB, rebuild bool) (map[string]string, map[string]int64, bo
 					}
 					return nil
 				}
-				if strings.HasSuffix(p, ".jsonl") {
+				if h == "grok" && d.Name() == "chat_history.jsonl" || h != "grok" && strings.HasSuffix(p, ".jsonl") {
 					local[p] = h
 				}
 				return nil

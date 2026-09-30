@@ -51,6 +51,21 @@ cat > "$pi/33333333-3333-4333-8333-333333333333.jsonl" <<'JSONL'
 {"type":"message","id":"33333333-3333-4333-8333-333333333305","parentId":"33333333-3333-4333-8333-333333333304","timestamp":"2026-09-27T10:12:00.000Z","message":{"role":"user","content":[{"type":"text","text":"Parser continues after malformed line: recoverytoken."}],"timestamp":1790503920000}}
 JSONL
 
+# Separate synthetic HOME keeps Grok coverage independent of baseline counts.
+grok="$home/grok-home/.grok/sessions/%2Fwork%2Fgrok%20fallback/55555555-5555-4555-8555-555555555555"
+mkdir -p "$grok"
+cat > "$grok/summary.json" <<'JSON'
+{"info":{"id":"grok-native-id","cwd":"/work/grok demo"},"created_at":"2026-09-27T10:15:00Z","current_model_id":"grok-summary-model"}
+JSON
+cat > "$grok/chat_history.jsonl" <<'JSONL'
+{"type":"user","content":"grokteatoken: 日月潭紅茶產於南投縣魚池鄉。日本語と 한국어 대화."}
+{"type":"assistant","model_id":"grok-message-model","content":[{"type":"text","text":"grokanswer: checking the tea notes."}],"tool_calls":[{"id":"tea-call","name":"read_file","arguments":"{\"path\":\"groktea.txt\"}"}]}
+{"type":"tool_result","tool_call_id":"tea-call","content":[{"type":"text","text":"groktearesult: notes found.\nSecond line is compacted."}]}
+{"broken-json":
+{"type":"user","content":[{"type":"text","text":"grokrecovery: continued after malformed line."}]}
+{"type":"assistant","tool_calls":[{"id":"pending","name":"bash","input":{"command":"echo grokappend"}}]}
+JSONL
+
 # Separate synthetic HOME keeps self-lookup coverage independent of baseline counts.
 python3 - "$home/self-lookups" <<'PY'
 import json,pathlib,sys

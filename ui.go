@@ -287,14 +287,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if key == "tab" || key == "shift+tab" {
-			hs := []string{"all", "claude", "codex", "pi"}
+			hs := []string{"all", "claude", "codex", "pi", "grok"}
 			for i, h := range hs {
 				if h == m.harness {
 					step := 1
 					if key == "shift+tab" {
-						step = 3
+						step = len(hs) - 1
 					}
-					m.harness = hs[(i+step)%4]
+					m.harness = hs[(i+step)%len(hs)]
 					break
 				}
 			}
@@ -495,6 +495,8 @@ func (m model) band(h string) string {
 		return m.pal.claude
 	case "codex":
 		return m.pal.codex
+	case "grok":
+		return m.pal.muted
 	default:
 		return m.pal.pi
 	}
@@ -806,7 +808,7 @@ func (m model) selectionRow(s string, w int) string {
 }
 func (m model) pageLines(w int) []string {
 	if m.help {
-		return []string{"  focus    Bright zone takes keys; search dims results", "  query    space = AND · quotes = phrase · -word = exclude", "  ↓ / esc search to results    / results to search", "  ↑ ↓     previous / next message", "  n / N   next / previous hit in transcript", "  h / H   add highlighter / clear highlights", "  v       full transcript (hide hit list)", "  o       open directory in editor", "  y       copy resume command", "  enter   exit and resume in original cwd", "  tab     all · claude · codex · pi", "  ctrl+c  quit"}
+		return []string{"  focus    Bright zone takes keys; search dims results", "  query    space = AND · quotes = phrase · -word = exclude", "  ↓ / esc search to results    / results to search", "  ↑ ↓     previous / next message", "  n / N   next / previous hit in transcript", "  h / H   add highlighter / clear highlights", "  v       full transcript (hide hit list)", "  o       open directory in editor", "  y       copy resume command", "  enter   exit and resume in original cwd", "  tab     all · claude · codex · pi · grok", "  ctrl+c  quit"}
 	}
 	if len(m.rows) == 0 {
 		return nil

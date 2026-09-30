@@ -638,7 +638,7 @@ func compactShow(ctx context.Context, db *sql.DB, k pageKey, offset int) (showPa
 	if len(ts) >= 10 {
 		p.Date = ts[:10]
 	}
-	p.ResumeCmd = resumeCmd(p.Harness, nativeID, path)
+	p.ResumeCmd = resumeCmd(p.Harness, nativeID, path, p.CWD)
 	if offset < p.Total {
 		msgs, err := db.QueryContext(ctx, `SELECT idx,ts,role,text FROM messages WHERE session_uid=? AND idx>=? AND idx<? ORDER BY idx LIMIT ?`, uid, start+offset, end, k.Limit)
 		if err != nil {
