@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -75,6 +76,12 @@ INSERT INTO meta(schema_version) SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM meta);`
 	}
 	if e == nil {
 		e = ensureColumn(db, "sources", "inode", "INTEGER DEFAULT 0")
+	}
+	if e == nil {
+		e = ensureColumn(db, "messages", "self", "INTEGER DEFAULT 0")
+	}
+	if e == nil {
+		e = ensureColumn(db, "sources", "tool_calls", "TEXT DEFAULT '[]'")
 	}
 	if e == nil {
 		_, e = db.Exec(`UPDATE sessions SET msg_count=(SELECT count(*) FROM messages WHERE session_uid=sessions.uid) WHERE msg_count IS NULL`)
@@ -274,6 +281,12 @@ type syncStats struct {
 func syncIndex(db *sql.DB, rebuild bool, progress func(int, int)) (syncStats, error) {
 	started := time.Now()
 	stats := syncStats{Messages: map[string]int{}}
+	var schemaVersion int
+	if e := db.QueryRow("SELECT schema_version FROM meta").Scan(&schemaVersion); e != nil {
+		return stats, e
+	}
+	migrating := schemaVersion < 3
+	rebuild = rebuild || migrating
 	files, dirs, walked, skipped, e := discover(db, rebuild)
 	if e != nil {
 		return stats, e
@@ -289,6 +302,9 @@ func syncIndex(db *sql.DB, rebuild bool, progress func(int, int)) (syncStats, er
 	sort.Strings(paths)
 	infos, failed := statPaths(paths)
 	stats.Skipped += failed
+	if migrating && stats.Skipped > 0 {
+		return stats, fmt.Errorf("index migration: %d sources could not be discovered or read", stats.Skipped)
+	}
 	timing("sync_stat", started)
 	started = time.Now()
 	tx, e := db.Begin()
@@ -313,16 +329,19 @@ func syncIndex(db *sql.DB, rebuild bool, progress func(int, int)) (syncStats, er
 			}
 		}
 	}
-	type sourceState struct{ mtime, size, offset, inode int64 }
+	type sourceState struct {
+		mtime, size, offset, inode int64
+		toolCalls                  string
+	}
 	old := map[string]sourceState{}
-	rows, e := tx.Query("SELECT path,mtime,size,offset,inode FROM sources")
+	rows, e := tx.Query("SELECT path,mtime,size,offset,inode,tool_calls FROM sources")
 	if e != nil {
 		return stats, e
 	}
 	for rows.Next() {
 		var p string
 		var v sourceState
-		if rows.Scan(&p, &v.mtime, &v.size, &v.offset, &v.inode) == nil {
+		if rows.Scan(&p, &v.mtime, &v.size, &v.offset, &v.inode, &v.toolCalls) == nil {
 			old[p] = v
 		}
 	}
@@ -355,6 +374,9 @@ func syncIndex(db *sql.DB, rebuild bool, progress func(int, int)) (syncStats, er
 		startIdx := 0
 		offset := int64(0)
 		if appendOnly {
+			if e = json.Unmarshal([]byte(v.toolCalls), &base.ToolCalls); e != nil {
+				return stats, e
+			}
 			offset = v.offset
 			e = tx.QueryRow("SELECT uid,harness,native_id,path,cwd,project,model,started,updated,msg_count FROM sessions WHERE path=?", p).Scan(&base.UID, &base.Harness, &base.NativeID, &base.Path, &base.CWD, &base.Project, &base.Model, &base.Started, &base.Updated, &startIdx)
 			if e != nil {
@@ -365,6 +387,10 @@ func syncIndex(db *sql.DB, rebuild bool, progress func(int, int)) (syncStats, er
 		}
 		s, nextOffset, err := parseFile(p, files[p], offset, size, base, startIdx)
 		if err != nil {
+			// No messages means a successful read with nothing to index.
+			if migrating && !errors.Is(err, errNoMessages) {
+				return stats, fmt.Errorf("index migration: %s: %w", p, err)
+			}
 			stats.Skipped++
 			if errors.Is(err, errNoMessages) {
 				if _, e = tx.Exec("INSERT INTO sources(path,mtime,size,offset,inode) VALUES(?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET mtime=excluded.mtime,size=excluded.size,offset=excluded.offset,inode=excluded.inode", p, mtime, size, nextOffset, inode); e != nil {
@@ -386,17 +412,26 @@ func syncIndex(db *sql.DB, rebuild bool, progress func(int, int)) (syncStats, er
 			}
 		}
 		for _, m := range s.Messages {
-			if _, e = tx.Exec("INSERT INTO messages(session_uid,idx,ts,role,text) VALUES(?,?,?,?,?)", s.UID, m.Index, m.TS, m.Role, m.Text); e != nil {
+			if _, e = tx.Exec("INSERT INTO messages(session_uid,idx,ts,role,text,self) VALUES(?,?,?,?,?,?)", s.UID, m.Index, m.TS, m.Role, m.Text, m.Self); e != nil {
 				return stats, e
 			}
 		}
-		if _, e = tx.Exec("INSERT INTO sources(path,mtime,size,offset,inode) VALUES(?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET mtime=excluded.mtime,size=excluded.size,offset=excluded.offset,inode=excluded.inode", p, mtime, size, nextOffset, inode); e != nil {
+		calls, err := json.Marshal(s.ToolCalls)
+		if err != nil {
+			return stats, err
+		}
+		if _, e = tx.Exec("INSERT INTO sources(path,mtime,size,offset,inode,tool_calls) VALUES(?,?,?,?,?,?) ON CONFLICT(path) DO UPDATE SET mtime=excluded.mtime,size=excluded.size,offset=excluded.offset,inode=excluded.inode,tool_calls=excluded.tool_calls", p, mtime, size, nextOffset, inode, string(calls)); e != nil {
 			return stats, e
 		}
 		stats.Changed++
 	}
 	timing("sync_changes", started)
 	started = time.Now()
+	if migrating {
+		if _, e = tx.Exec("UPDATE meta SET schema_version=3"); e != nil {
+			return stats, e
+		}
+	}
 	if e = tx.Commit(); e != nil {
 		return stats, e
 	}

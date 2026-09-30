@@ -44,7 +44,7 @@ Don't read the raw JSONL. `show --full` has everything.
 
 - The user may have worked in another language. Try both, e.g. `checkout` and `結帳`.
 - Try synonyms before concluding nothing exists.
-- Conversation hits rank above tool output.
+- Conversation hits rank above tool output. Kioku tool calls/results are hidden by default; `--include-self` restores them for a search or `--sessions` run. User/assistant mentions stay searchable.
 - If you know the project, add `-p <project>` (its directory name). It removes most decoys in one step. `--harness claude|codex|pi` narrows by agent. `--json` gives structured output with `next_cursor`.
 
 ## Rules

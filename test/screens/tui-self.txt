@@ -1,0 +1,123 @@
+pi default:
+kioku ▸ secretword▌                                                                              0 messages · 0 sessions
+highlights none · press h in results to add
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ No message contains all of these words. Drop a word or remove the quotes.
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+type to search   ↓/esc results   enter resume   tab agent
+pi --include-self:
+kioku ▸ secretword▌                                                                              6 messages · 1 sessions
+highlights none · press h in results to add
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+›▌ bash · secretword lookup result                                                           pi      self-…           2d
+ ▌ bash · secretword lookup result                                                           pi      self-…           2d
+ ▌ bash · secretword lookup result                                                           pi      self-…           2d
+ ▌ …kioku --sessions secretword                                                              pi      self-…           2d
+ ▌ …TAG=yes kioku secretword                                                                 pi      self-…           2d
+ ▌ …kioku --json secretword                                                                  pi      self-…           2d
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+▌ self-lookups  /work/self-lookups  2026-09-27  pi                                                            hit 1 of 6
+✱  11:00 tool  bash · kioku --sessions secretword
+     ⋯
+✱  11:00 tool  bash · secretword lookup result
+✱  11:00 tool  bash · TAG="two words" command kioku --json secretword
+✱  11:00 tool  bash · secretword lookup result
+✱  11:00 tool  bash · command TAG=yes kioku secretword
+›  11:00 tool  bash · secretword lookup result
+     ⋯
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+type to search   ↓/esc results   enter resume   tab agent
+all --include-self:
+kioku ▸ secretword▌                                                                             20 messages · 4 sessions
+highlights none · press h in results to add
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+›▌ Please remember secretword.                                                               claude  normal           2d
+ ▌ …merely mentions secretword.                                                              claude  normal           2d
+ ▌ bash · secretword lookup result                                                           pi      self-…           2d
+ ▌ bash · secretword lookup result                                                           pi      self-…           2d
+ ▌ bash · secretword lookup result                                                           pi      self-…           2d
+ ▌ …kioku --sessions secretword                                                              pi      self-…           2d
+ ▌ bash · secretword lookup result                                                           codex   self-…           2d
+ ▌ bash · secretword lookup result                                                           codex   self-…           2d
+ ▌ bash · secretword lookup result                                                           codex   self-…           2d
+ ▌ bash · secretword lookup result                                                           claude  self-…           2d
+ ▌ bash · secretword lookup result                                                           claude  self-…           2d
+ ▌ bash · secretword lookup result                                                           claude  self-…           2d
+ ▌ …kioku --sessions secretword                                                              claude  self-…           2d
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+▌ normal  /work/normal  2026-09-27  claude                                                                   hit 1 of 20
+›  11:01 you   Please remember secretword.
+✱  11:01 asst  kioku merely mentions secretword.
+     ⋯
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+type to search   ↓/esc results   enter resume   tab agent

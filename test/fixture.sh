@@ -51,6 +51,51 @@ cat > "$pi/33333333-3333-4333-8333-333333333333.jsonl" <<'JSONL'
 {"type":"message","id":"33333333-3333-4333-8333-333333333305","parentId":"33333333-3333-4333-8333-333333333304","timestamp":"2026-09-27T10:12:00.000Z","message":{"role":"user","content":[{"type":"text","text":"Parser continues after malformed line: recoverytoken."}],"timestamp":1790503920000}}
 JSONL
 
+# Separate synthetic HOME keeps self-lookup coverage independent of baseline counts.
+python3 - "$home/self-lookups" <<'PY'
+import json,pathlib,sys
+home=pathlib.Path(sys.argv[1])
+commands=['kioku --sessions secretword', ' TAG="two words" command kioku --json secretword', 'command TAG=yes kioku secretword']
+for harness,store in [('claude','.claude/projects/self'),('codex','.codex/sessions'),('pi','.pi/agent/sessions/self')]:
+ rows=[]
+ def emit(role,text='',calls=(),call_id='',name='bash'):
+  ts='2026-09-27T11:00:00Z'
+  if harness=='claude':
+   content=[{'type':'text','text':text}] if text else []
+   content += [{'type':'tool_use','id':i,'name':n,'input':{'command':cmd}} for i,n,cmd in calls]
+   if role=='tool': content=[{'type':'tool_result','tool_use_id':call_id,'content':text}]
+   rows.append({'type':'user' if role in ('user','tool') else 'assistant','timestamp':ts,'cwd':'/work/self-lookups','sessionId':'self-claude','message':{'role':role,'content':content}})
+  elif harness=='codex':
+   if text and role!='tool': rows.append({'type':'response_item','timestamp':ts,'payload':{'type':'message','role':role,'content':[{'type':'input_text' if role=='user' else 'output_text','text':text}]}})
+   for i,n,cmd in calls:
+    payload={'type':'custom_tool_call','input':cmd} if i=='self-2' else {'type':'function_call','arguments':json.dumps({'cmd':cmd})}
+    rows.append({'type':'response_item','timestamp':ts,'payload':dict(payload,call_id=i,name=n)})
+   if role=='tool': rows.append({'type':'response_item','timestamp':ts,'payload':{'type':'custom_tool_call_output' if call_id=='self-2' else 'function_call_output','call_id':call_id,'output':text}})
+  else:
+   content=[{'type':'text','text':text}] if text else []
+   content += [{'type':'toolCall','id':i,'name':n,'arguments':{'command':cmd}} for i,n,cmd in calls]
+   rows.append({'type':'message','timestamp':ts,'message':{'role':'toolResult' if role=='tool' else role,'content':content,'toolCallId':call_id,'toolName':name}})
+ if harness=='codex': rows.append({'type':'session_meta','payload':{'id':'self-codex','cwd':'/work/self-lookups'}})
+ if harness=='pi': rows.append({'type':'session','id':'self-pi','cwd':'/work/self-lookups'})
+ emit('assistant','Searching archive.',calls=[('self-0','bash',commands[0]),('ordinary','bash','echo ordinaryprobe')])
+ emit('tool','ordinaryprobe output',call_id='ordinary')
+ emit('tool','secretword lookup result',call_id='self-0')
+ for i,cmd in enumerate(commands[1:],1):
+  emit('assistant',calls=[(f'self-{i}','bash',cmd)])
+  emit('tool','secretword lookup result',call_id='' if harness=='pi' else f'self-{i}')
+ # Leave an unresolved call for the E2E to append its result after indexing.
+ emit('assistant',calls=[('pending','bash','kioku pendingsecret')])
+ path=home/store/'self.jsonl'; path.parent.mkdir(parents=True,exist_ok=True)
+ path.write_text(''.join(json.dumps(r)+'\n' for r in rows))
+normal=home/'.claude/projects/normal/normal.jsonl'; normal.parent.mkdir(parents=True,exist_ok=True)
+rows=[{'type':role,'timestamp':'2026-09-27T11:01:00Z','cwd':'/work/normal','sessionId':'normal','message':{'role':role,'content':text}} for role,text in [('user','Please remember secretword.'),('assistant','kioku merely mentions secretword.')]]
+rows[-1]['message']['content']=[{'type':'text','text':rows[-1]['message']['content']}]
+for i,cmd in enumerate(['echo kioku mentionprobe','kioku-other mentionprobe','FOO=kioku echo mentionprobe']):
+ rows.append({'type':'assistant','message':{'content':[{'type':'tool_use','id':str(i),'name':'bash','input':{'command':cmd}}]}})
+ rows.append({'type':'user','message':{'content':[{'type':'tool_result','tool_use_id':str(i),'content':'mentionprobe result'}]}})
+normal.write_text(''.join(json.dumps(r)+'\n' for r in rows))
+PY
+
 # Relocated copies exercise native config dirs, including spaces in paths.
 mkdir -p "$home/relocated/claude config" "$home/relocated/codex config" "$home/relocated/pi config"
 cp -R "$home/.claude/projects" "$home/relocated/claude config/projects"

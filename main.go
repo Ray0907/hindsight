@@ -33,6 +33,7 @@ Flags: --json (one JSON page), --limit N (default 10 for pages, 300 for TUI),
        --project NAME, -p NAME (repeatable; project basename, case-insensitive),
        --context N (show: before/after, default 3), --query Q (center show hit),
        --all-time (search: include older short-prefix matches),
+       --include-self (search: include kioku tool calls and results),
        --all (show: whole session), --full (show: untruncated hit),
        --no-mouse, --rebuild (index), --version, --help, -h.
 Query: space means AND; "black tea" is a phrase; -word excludes;
@@ -99,6 +100,7 @@ func run() error {
 	showQuery := fs.String("query", "", "locate the hit in show")
 	contextSize := fs.Int("context", 3, "messages before and after")
 	allTime := fs.Bool("all-time", false, "include older short-prefix matches")
+	includeSelf := fs.Bool("include-self", false, "include kioku tool calls and results")
 	all := fs.Bool("all", false, "show full session")
 	full := fs.Bool("full", false, "show selected message without truncation")
 	sessions := fs.Bool("sessions", false, "group by session")
@@ -146,7 +148,7 @@ func run() error {
 			continue
 		}
 		switch a {
-		case "--rebuild", "--json", "--no-mouse", "--version", "--sessions", "--all-time", "--all", "--full":
+		case "--rebuild", "--json", "--no-mouse", "--version", "--sessions", "--all-time", "--include-self", "--all", "--full":
 			if e := fs.Parse([]string{a}); e != nil {
 				return e
 			}
@@ -231,7 +233,7 @@ func run() error {
 			mode = "show"
 			q = *showQuery
 		}
-		key := pageKey{Mode: mode, Query: q, Harness: *harness, Projects: projects, Limit: *limit, Context: *contextSize, JSON: *jsonFlag, AllTime: *allTime && shortLatin(q), All: *all, Full: *full, NoMouse: *noMouse, Rebuild: *rebuild}
+		key := pageKey{Mode: mode, Query: q, Harness: *harness, Projects: projects, Limit: *limit, Context: *contextSize, JSON: *jsonFlag, AllTime: *allTime && shortLatin(q), IncludeSelf: *includeSelf, All: *all, Full: *full, NoMouse: *noMouse, Rebuild: *rebuild}
 		if show {
 			key.Ref = words[0]
 		}
@@ -261,11 +263,11 @@ func run() error {
 			return renderHits(page, *jsonFlag, q)
 		}
 	}
-	rows, e := search(context.Background(), db, q, *harness, projects, *limit, *allTime)
+	rows, e := search(context.Background(), db, q, *harness, projects, *limit, *allTime, *includeSelf)
 	if e != nil {
 		return e
 	}
-	m := newModel(db, q, *harness, projects, rows, !*noMouse, *limit)
+	m := newModel(db, q, *harness, projects, rows, !*noMouse, *limit, *includeSelf)
 	m.allTime = *allTime
 	options := []tea.ProgramOption{tea.WithAltScreen()}
 	if !*noMouse {

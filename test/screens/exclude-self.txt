@@ -1,0 +1,6 @@
+Default hides 18 lookup rows; include-self restores them; mentions and ordinary tools survive; both paging modes are consistent.
+Failed migration preserves old rows and version; retry reparses unchanged files, restores self markers, and accepts metadata-only sources.
+Append-only matching works across sync boundaries for all three harnesses; transcript bytes unchanged by searches.
+Common-query fast path filters counts, session roles and consecutive pages consistently.
+Short-prefix date windows and omitted-older counts exclude self by default.
+Escaped whitespace and quotes in shell assignments hide matching calls/results by default and restore them with include-self.

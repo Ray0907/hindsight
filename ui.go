@@ -41,7 +41,7 @@ type model struct {
 	hitIndex                         map[int]bool
 	sel, cursor, width, height       int
 	limit                            int
-	allTime                          bool
+	allTime, includeSelf             bool
 	focus, full, prompt, help, mouse bool
 	pens                             []pen
 	status                           string
@@ -72,12 +72,12 @@ type syncMsg struct {
 }
 type debounce int
 
-func newModel(db *sql.DB, q, h string, projects []string, rows []hit, mouse bool, limit int) model {
+func newModel(db *sql.DB, q, h string, projects []string, rows []hit, mouse bool, limit int, includeSelf bool) model {
 	p := light
 	if os.Getenv("KIOKU_THEME") == "dark" || os.Getenv("KIOKU_THEME") == "" && termenv.HasDarkBackground() {
 		p = dark
 	}
-	m := model{db: db, q: q, harness: h, projects: projects, rows: rows, mouse: mouse, limit: limit, pal: p, width: 80, height: 24, cursor: -1, focus: true}
+	m := model{db: db, q: q, harness: h, projects: projects, rows: rows, mouse: mouse, limit: limit, includeSelf: includeSelf, pal: p, width: 80, height: 24, cursor: -1, focus: true}
 	m.initial = m.requestLoad()
 	return m
 }
@@ -120,9 +120,9 @@ type syncEnvelope struct {
 	ch <-chan syncMsg
 }
 
-func queryCmd(ctx context.Context, db *sql.DB, q, h string, projects []string, limit, rev int, allTime bool) tea.Cmd {
+func queryCmd(ctx context.Context, db *sql.DB, q, h string, projects []string, limit, rev int, allTime, includeSelf bool) tea.Cmd {
 	return func() tea.Msg {
-		rows, e := search(ctx, db, q, h, projects, limit, allTime)
+		rows, e := search(ctx, db, q, h, projects, limit, allTime, includeSelf)
 		return resultMsg{rev, rows, e}
 	}
 }
@@ -138,7 +138,7 @@ func (m *model) requestQuery() tea.Cmd {
 	m.hitIndex = map[int]bool{}
 	ctx, cancel := context.WithCancel(context.Background())
 	m.cancel = cancel
-	return queryCmd(ctx, m.db, m.q, m.harness, m.projects, m.limit, m.revision, m.allTime)
+	return queryCmd(ctx, m.db, m.q, m.harness, m.projects, m.limit, m.revision, m.allTime, m.includeSelf)
 }
 func (m *model) requestLoad() tea.Cmd {
 	if m.loadCancel != nil {
@@ -166,11 +166,12 @@ func (m *model) requestLoad() tea.Cmd {
 	m.loadCancel = cancel
 	rev := m.loadRevision
 	q := m.q
+	includeSelf := m.includeSelf
 	return func() tea.Msg {
 		msgs, e := transcript(ctx, m.db, selected.UID)
 		hits := map[int]bool{}
 		if e == nil && toFTS(q) != "" {
-			rows, err := m.db.QueryContext(ctx, `SELECT m.idx FROM messages_fts JOIN messages m ON m.id=messages_fts.rowid WHERE messages_fts MATCH ? AND m.session_uid=?`, toFTS(q), selected.UID)
+			rows, err := m.db.QueryContext(ctx, `SELECT m.idx FROM messages_fts JOIN messages m ON m.id=messages_fts.rowid WHERE messages_fts MATCH ? AND m.session_uid=? `+selfFilter(includeSelf), toFTS(q), selected.UID)
 			if err == nil {
 				for rows.Next() {
 					var i int

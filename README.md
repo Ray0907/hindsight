@@ -65,6 +65,8 @@ When stdout is not a TTY, search prints a compact text page; `--json` prints a s
 
 Search: space means AND; `"black tea"` is an exact phrase; `-word` excludes; bare words are prefixes (`resum` finds `resuming`); use `kioku -- --help` to search a flag-like word. CJK terms match inside text, including single characters. Empty or negative-only queries show the latest message of each recent session. The TUI shows up to 300 results by default; one-shot text and JSON pages show 10 (`--limit N` changes either): selective queries use FTS5 BM25 (newest first on ties); queries whose positive ASCII terms and full FTS match both cover at least 90% use newest matching message time instead. Matching user/assistant messages appear before tool output, with the existing order preserved within each group. Only a single unquoted 1–2 letter Latin prefix is restricted to messages from the seven days before the index's latest timestamp; when older matches are omitted, text pages end with `N older matches omitted (--all-time)` and JSON includes `omitted_older` (a message count, including in `--sessions`). Use `--all-time` to remove this restriction.
 
+Kioku tool calls and their results are hidden from search by default; `--include-self` restores them for that run (including `--sessions`), without reindexing. User/assistant mentions remain searchable.
+
 ## For agents
 
 ```sh

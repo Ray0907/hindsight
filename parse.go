@@ -7,11 +7,34 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
 
 var errNoMessages = errors.New("no messages")
+var selfCommandRE = regexp.MustCompile(`^\s*(?:(?:[A-Za-z_][A-Za-z0-9_]*=(?:\\.|[^\s"'\\]|"(?:\\.|[^"\\])*"|'[^']*')*\s+)|command\s+)*kioku(?:\s|$|[;&|<>])`)
+
+func toolCommand(v any) string {
+	t := str(v)
+	var input map[string]any
+	if t != "" {
+		if json.Unmarshal([]byte(t), &input) != nil {
+			return t
+		}
+	} else {
+		input = obj(v)
+	}
+	if cmd := str(input["command"]); cmd != "" {
+		return cmd
+	}
+	return str(input["cmd"])
+}
+
+type toolCall struct {
+	ID, Name string
+	Self     bool
+}
 
 type message struct {
 	ID    int64  `json:"-"`
@@ -19,10 +42,12 @@ type message struct {
 	TS    string `json:"ts"`
 	Role  string `json:"role"`
 	Text  string `json:"text"`
+	Self  bool   `json:"-"`
 }
 type session struct {
 	UID, Harness, NativeID, Path, CWD, Project, Model, Started, Updated string
 	Messages                                                            []message
+	ToolCalls                                                           []toolCall
 }
 
 func str(v any) string         { s, _ := v.(string); return s }
@@ -81,8 +106,17 @@ func parseFile(path, h string, offset, size int64, base session, startIdx int) (
 		fallbackTS = info.ModTime().UTC().Format(time.RFC3339Nano)
 	}
 	latest := s.Updated
-	var callNames = map[string]string{}
-	add := func(ts, role, text string) {
+	resultCall := func(id string, ordered bool) toolCall {
+		// ponytail: scan pending calls; add an ID map if parallel batches become large.
+		for i, call := range s.ToolCalls {
+			if call.ID == id || id == "" && ordered {
+				s.ToolCalls = append(s.ToolCalls[:i], s.ToolCalls[i+1:]...)
+				return call
+			}
+		}
+		return toolCall{Name: "tool"}
+	}
+	add := func(ts, role, text string, self ...bool) {
 		text = clean(text)
 		if role == "tool" {
 			text = first(text)
@@ -99,7 +133,7 @@ func parseFile(path, h string, offset, size int64, base session, startIdx int) (
 		if ts == "" {
 			ts = fallbackTS
 		}
-		s.Messages = append(s.Messages, message{Index: startIdx + len(s.Messages), TS: ts, Role: role, Text: text})
+		s.Messages = append(s.Messages, message{Index: startIdx + len(s.Messages), TS: ts, Role: role, Text: text, Self: len(self) > 0 && self[0]})
 		if s.Started == "" {
 			s.Started = ts
 		}
@@ -142,15 +176,12 @@ func parseFile(path, h string, offset, size int64, base session, startIdx int) (
 								if str(x["type"]) == "text" {
 									add(ts, "user", str(x["text"]))
 								} else if str(x["type"]) == "tool_result" {
-									name := callNames[str(x["tool_use_id"])]
-									if name == "" {
-										name = "tool"
-									}
+									call := resultCall(str(x["tool_use_id"]), false)
 									t := str(x["content"])
 									if t == "" {
 										t = str(obj(x["content"])["text"])
 									}
-									add(ts, "tool", name+" · "+first(t))
+									add(ts, "tool", call.Name+" · "+first(t), call.Self)
 								}
 							}
 						}
@@ -165,16 +196,17 @@ func parseFile(path, h string, offset, size int64, base session, startIdx int) (
 								add(ts, "asst", str(x["text"]))
 							case "tool_use":
 								name := str(x["name"])
-								callNames[str(x["id"])] = name
 								input := obj(x["input"])
 								t := str(input["command"])
+								self := selfCommandRE.MatchString(t)
+								s.ToolCalls = append(s.ToolCalls, toolCall{str(x["id"]), name, self})
 								if t == "" {
 									t = str(input["file_path"])
 								}
 								if t == "" {
 									t = str(input["path"])
 								}
-								add(ts, "tool", name+" · "+first(t))
+								add(ts, "tool", name+" · "+first(t), self)
 							}
 						}
 					}
@@ -212,18 +244,18 @@ func parseFile(path, h string, offset, size int64, base session, startIdx int) (
 							}
 						case "function_call", "custom_tool_call":
 							name := str(p["name"])
-							callNames[str(p["call_id"])] = name
 							t := str(p["arguments"])
+							cmd := toolCommand(p["arguments"])
 							if t == "" {
-								t = str(obj(p["input"])["command"])
+								t = toolCommand(p["input"])
+								cmd = t
 							}
-							add(ts, "tool", name+" · "+first(t))
+							self := selfCommandRE.MatchString(cmd)
+							s.ToolCalls = append(s.ToolCalls, toolCall{str(p["call_id"]), name, self})
+							add(ts, "tool", name+" · "+first(t), self)
 						case "function_call_output", "custom_tool_call_output":
-							name := callNames[str(p["call_id"])]
-							if name == "" {
-								name = "tool"
-							}
-							add(ts, "tool", name+" · "+first(str(p["output"])))
+							call := resultCall(str(p["call_id"]), false)
+							add(ts, "tool", call.Name+" · "+first(str(p["output"])), call.Self)
 						}
 					}
 				case "pi":
@@ -252,17 +284,20 @@ func parseFile(path, h string, offset, size int64, base session, startIdx int) (
 									} else if str(x["type"]) == "toolCall" {
 										name := str(x["name"])
 										t := str(obj(x["arguments"])["command"])
+										self := selfCommandRE.MatchString(t)
+										s.ToolCalls = append(s.ToolCalls, toolCall{str(x["id"]), name, self})
 										if t == "" {
 											t = str(obj(x["arguments"])["path"])
 										}
-										add(ts, "tool", name+" · "+first(t))
+										add(ts, "tool", name+" · "+first(t), self)
 									}
 								}
 							}
 						case "toolResult":
+							call := resultCall(str(m["toolCallId"]), true)
 							name := str(m["toolName"])
 							for _, t := range textParts(m["content"], "text") {
-								add(ts, "tool", name+" · "+first(t))
+								add(ts, "tool", name+" · "+first(t), call.Self)
 								break
 							}
 						}

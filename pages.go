@@ -21,6 +21,7 @@ type pageKey struct {
 	Projects                                   []string
 	Limit, Context                             int
 	JSON, AllTime, All, Full, NoMouse, Rebuild bool
+	IncludeSelf                                bool `json:",omitempty"`
 }
 
 func (k pageKey) fingerprint() string {
@@ -178,12 +179,12 @@ func renderSessions(p sessionPage, asJSON bool) error {
 }
 
 // The same FTS predicate (including the short-prefix date bound) feeds counts and pages.
-func matchSource(ctx context.Context, db *sql.DB, q, harness string, projects, names []string, allTime bool) (string, []any, int, error) {
+func matchSource(ctx context.Context, db *sql.DB, q, harness string, projects, names []string, allTime, includeSelf bool) (string, []any, int, error) {
 	from := `FROM messages_fts JOIN messages m ON m.id=messages_fts.rowid `
 	if harness != "" && harness != "all" || len(projects) > 0 {
 		from += `JOIN sessions s ON s.uid=m.session_uid `
 	}
-	from += `WHERE messages_fts MATCH ? `
+	from += `WHERE messages_fts MATCH ? ` + selfFilter(includeSelf)
 	args := []any{toFTS(q)}
 	if harness != "" && harness != "all" {
 		from += `AND s.harness=? `
@@ -195,7 +196,7 @@ func matchSource(ctx context.Context, db *sql.DB, q, harness string, projects, n
 	omitted := 0
 	if shortLatin(q) && !allTime {
 		var latest string
-		if e := db.QueryRowContext(ctx, `SELECT coalesce(max(ts),'') FROM messages`).Scan(&latest); e != nil {
+		if e := db.QueryRowContext(ctx, `SELECT coalesce(max(m.ts),'') FROM messages m WHERE 1 `+selfFilter(includeSelf)).Scan(&latest); e != nil {
 			return "", nil, 0, e
 		}
 		if t, e := time.Parse(time.RFC3339Nano, latest); e == nil {
@@ -237,7 +238,7 @@ func compactSearch(ctx context.Context, db *sql.DB, k pageKey, offset int) (hitP
 	}
 	var matches []hit
 	if toFTS(q) == "" {
-		from := `FROM sessions s JOIN messages m ON s.uid=m.session_uid WHERE m.idx=(SELECT max(idx) FROM messages WHERE session_uid=s.uid) `
+		from := `FROM sessions s JOIN messages m ON s.uid=m.session_uid WHERE m.idx=(SELECT max(idx) FROM messages m WHERE session_uid=s.uid ` + selfFilter(k.IncludeSelf) + `) `
 		args := []any{}
 		if harness != "" && harness != "all" {
 			from += `AND s.harness=? `
@@ -261,7 +262,7 @@ func compactSearch(ctx context.Context, db *sql.DB, k pageKey, offset int) (hitP
 			}
 		}
 	} else {
-		from, args, omitted, e := matchSource(ctx, db, q, harness, k.Projects, names, k.AllTime)
+		from, args, omitted, e := matchSource(ctx, db, q, harness, k.Projects, names, k.AllTime, k.IncludeSelf)
 		if e != nil {
 			return p, e
 		}
@@ -284,7 +285,7 @@ func compactSearch(ctx context.Context, db *sql.DB, k pageKey, offset int) (hitP
 			if common {
 				ids := []int64{}
 				if offset < conversations {
-					found, err := newestMatches(ctx, db, toFTS(q), harness, k.Projects, names, false, min(conversations, offset+limit))
+					found, err := newestMatches(ctx, db, toFTS(q), harness, k.Projects, names, false, k.IncludeSelf, min(conversations, offset+limit))
 					if err != nil {
 						return p, err
 					}
@@ -292,7 +293,7 @@ func compactSearch(ctx context.Context, db *sql.DB, k pageKey, offset int) (hitP
 				}
 				if offset+limit > conversations && p.Total > conversations {
 					toolOffset := max(0, offset-conversations)
-					found, err := newestMatches(ctx, db, toFTS(q), harness, k.Projects, names, true, min(p.Total-conversations, offset+limit-conversations))
+					found, err := newestMatches(ctx, db, toFTS(q), harness, k.Projects, names, true, k.IncludeSelf, min(p.Total-conversations, offset+limit-conversations))
 					if err != nil {
 						return p, err
 					}
@@ -368,7 +369,7 @@ func compactSessions(ctx context.Context, db *sql.DB, k pageKey, offset int) (se
 	var query string
 	args := []any{}
 	if toFTS(q) == "" {
-		from := `FROM sessions s JOIN messages m ON s.uid=m.session_uid WHERE m.idx=(SELECT max(idx) FROM messages WHERE session_uid=s.uid) `
+		from := `FROM sessions s JOIN messages m ON s.uid=m.session_uid WHERE m.idx=(SELECT max(idx) FROM messages m WHERE session_uid=s.uid ` + selfFilter(k.IncludeSelf) + `) `
 		if harness != "" && harness != "all" {
 			from += `AND s.harness=? `
 			args = append(args, harness)
@@ -381,7 +382,7 @@ func compactSessions(ctx context.Context, db *sql.DB, k pageKey, offset int) (se
 		}
 		query = `SELECT s.uid,s.harness,s.project,m.ts,m.text,1,m.idx,(m.role='user'),(m.role='asst'),(m.role='tool') ` + from + `ORDER BY (m.role='tool'),m.ts DESC,m.id DESC LIMIT ? OFFSET ?`
 	} else {
-		from, values, omitted, e := matchSource(ctx, db, q, harness, k.Projects, names, k.AllTime)
+		from, values, omitted, e := matchSource(ctx, db, q, harness, k.Projects, names, k.AllTime, k.IncludeSelf)
 		if e != nil {
 			return p, e
 		}
